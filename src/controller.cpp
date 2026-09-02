@@ -2,6 +2,7 @@
 
 #include "keyboardwidget.h"
 
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -166,6 +167,18 @@ bool Controller::isVisible() const
         return kwinPanelVisible();
     }
     return m_keyboard->isVisible();
+}
+
+QString Controller::status() const
+{
+    const char *mode = m_mode == Mode::InputPanel ? "input-panel" : m_mode == Mode::LayerShell ? "layer-shell" : "plain";
+    return QStringLiteral("shell=%1 visible=%2 %3").arg(QLatin1String(mode), isVisible() ? QStringLiteral("yes") : QStringLiteral("no"), m_statusInfo);
+}
+
+void Controller::quit()
+{
+    m_keyboard->releaseAll();
+    QCoreApplication::quit();
 }
 
 void Controller::imActivated()

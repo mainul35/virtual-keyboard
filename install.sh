@@ -77,11 +77,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX"
 cmake --build build -j"$(nproc)"
 
 echo "==> Installing to $PREFIX (sudo)"
+# Stop any instance started by hand; it would otherwise block KWin's own one.
+if command -v vkbd >/dev/null; then vkbd --quit 2>/dev/null || true; fi
 sudo cmake --install build
-# KWin only looks in the XDG applications dirs; /usr/local/share is one of them
-# on most distros, but make sure the entry is visible everywhere.
-sudo install -Dm644 data/vkbd.desktop /usr/share/applications/vkbd.desktop
-sudo install -Dm644 data/vkbd-toggle.desktop /usr/share/applications/vkbd-toggle.desktop
+# KWin only looks in the XDG applications dirs and runs Exec with its own PATH,
+# so install the entries under /usr/share with an absolute Exec path.
+sed "s|^Exec=vkbd|Exec=$PREFIX/bin/vkbd|" data/vkbd.desktop | sudo tee /usr/share/applications/vkbd.desktop >/dev/null
+sed "s|^Exec=vkbd|Exec=$PREFIX/bin/vkbd|" data/vkbd-toggle.desktop | sudo tee /usr/share/applications/vkbd-toggle.desktop >/dev/null
+sudo chmod 644 /usr/share/applications/vkbd.desktop /usr/share/applications/vkbd-toggle.desktop
 
 echo "==> uinput access (fallback backend for X11 / apps without text-input support)"
 sudo install -Dm644 data/60-vkbd-uinput.rules /etc/udev/rules.d/60-vkbd-uinput.rules
@@ -96,6 +99,10 @@ fi
 if [[ $DO_KWIN -eq 1 ]]; then
     echo "==> Registering vkbd as KWin's virtual keyboard"
     if command -v kwriteconfig6 >/dev/null; then
+        # KWin only (re)starts the input method when the command changes, so
+        # clear it first to make sure the freshly installed binary is launched.
+        kwriteconfig6 --file kwinrc --group Wayland --key InputMethod ""
+        sleep 1
         kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/vkbd.desktop
         kwriteconfig6 --file kwinrc --group Wayland --key VirtualKeyboardEnabled true
         if command -v qdbus6 >/dev/null; then
@@ -103,7 +110,9 @@ if [[ $DO_KWIN -eq 1 ]]; then
         elif command -v qdbus >/dev/null; then
             qdbus org.kde.KWin /KWin reconfigure || true
         fi
+        sleep 2
         echo "    done. You can also pick it in System Settings > Keyboard > Virtual Keyboard."
+        echo "    If it does not appear when you tap a text field, run: vkbd --doctor"
     else
         echo "    kwriteconfig6 not found; choose 'vkbd Virtual Keyboard' in System Settings > Keyboard > Virtual Keyboard."
     fi

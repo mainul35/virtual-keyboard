@@ -11,12 +11,20 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-UinputInjector::UinputInjector()
+bool UinputInjector::open()
 {
+    if (m_fd >= 0) {
+        return true;
+    }
+    if (m_attempted) {
+        return false;
+    }
+    m_attempted = true;
+
     m_fd = ::open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
     if (m_fd < 0) {
         m_error = QStringLiteral("cannot open /dev/uinput: %1").arg(QString::fromLocal8Bit(strerror(errno)));
-        return;
+        return false;
     }
 
     auto fail = [this](const char *what) {
@@ -27,7 +35,7 @@ UinputInjector::UinputInjector()
 
     if (ioctl(m_fd, UI_SET_EVBIT, EV_KEY) < 0) {
         fail("UI_SET_EVBIT");
-        return;
+        return false;
     }
     // Plain keyboard keys only. Deliberately stop before the BTN_* range so
     // libinput never mistakes the device for a mouse or joystick.
@@ -45,12 +53,14 @@ UinputInjector::UinputInjector()
 
     if (ioctl(m_fd, UI_DEV_SETUP, &setup) < 0) {
         fail("UI_DEV_SETUP");
-        return;
+        return false;
     }
     if (ioctl(m_fd, UI_DEV_CREATE) < 0) {
         fail("UI_DEV_CREATE");
-        return;
+        return false;
     }
+    qInfo() << "vkbd: created uinput keyboard device";
+    return true;
 }
 
 UinputInjector::~UinputInjector()
@@ -59,6 +69,11 @@ UinputInjector::~UinputInjector()
         ioctl(m_fd, UI_DEV_DESTROY);
         ::close(m_fd);
     }
+}
+
+bool UinputInjector::isReady() const
+{
+    return const_cast<UinputInjector *>(this)->open();
 }
 
 void UinputInjector::emitEvent(unsigned short type, unsigned short code, int value)
@@ -76,7 +91,7 @@ void UinputInjector::emitEvent(unsigned short type, unsigned short code, int val
 
 void UinputInjector::key(int code, bool pressed)
 {
-    if (m_fd < 0) {
+    if (!open()) {
         return;
     }
     emitEvent(EV_KEY, static_cast<unsigned short>(code), pressed ? 1 : 0);

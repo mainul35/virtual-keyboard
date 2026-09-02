@@ -84,8 +84,9 @@ so the udev rule and `input` group membership are required in this mode.
 ## Options
 
 ```
-vkbd [--show|--hide|--toggle] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
+vkbd [--show|--hide|--toggle|--quit] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
      [--height 0.42] [--no-fn-row] [--toggle-button]
+vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release
 vkbd --render preview.png:1280x800     # draw the layout to a PNG (QT_QPA_PLATFORM=offscreen works)
 ```
@@ -127,7 +128,16 @@ protocols/               input-method-unstable-v1.xml (vendored from wayland-pro
 
 ## Troubleshooting
 
-* *Keys do nothing*: run `vkbd` from a terminal; it prints which backend it uses.
+* Start with `vkbd --doctor`. It shows what KWin is configured to launch,
+  whether that resolves to a binary, KWin's view of the virtual keyboard, which
+  vkbd instance is running and how it was started, and the last log
+  (`~/.cache/vkbd/vkbd.log`).
+* *Keyboard set in System Settings but never appears*: do not run `vkbd` by hand
+  in the same session. KWin starts its own instance; a manually started one is
+  now replaced automatically, but older builds made KWin's instance exit. Stop a
+  stray one with `vkbd --quit`. KWin's stderr for the input method is in
+  `journalctl --user -b | grep vkbd`.
+* *Keys do nothing*: run `vkbd --self-test`; it prints which backend it can use.
   "backend = none" means KWin did not activate the IM and `/dev/uinput` is not
   writable. Check `ls -l /dev/uinput` and `id` for the `input` group.
 * *Keyboard never appears when tapping a field*: make sure the field is in an app

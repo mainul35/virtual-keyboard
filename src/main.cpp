@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "doctor.h"
 #include "injector.h"
 #include "keyboardwidget.h"
 #include "keymap.h"
@@ -8,14 +9,22 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#include <QDBusServiceWatcher>
+#include <QDateTime>
 #include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QScreen>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QWindow>
 
+#include <cstdio>
 #include <linux/input-event-codes.h>
 #include <memory>
+#include <unistd.h>
 
 #ifdef VKBD_HAVE_WAYLAND
 #include "wayland/inputmethod.h"
@@ -42,10 +51,48 @@ QSize panelSizeFor(const QScreen *screen, double heightFraction)
     return QSize(g.width(), qRound(g.height() * f));
 }
 
+// Messages go to stderr (KWin forwards that to its journal) and to a log file
+// so `vkbd --doctor` can show what the KWin-started instance did.
+QFile *g_logFile = nullptr;
+
+void messageHandler(QtMsgType type, const QMessageLogContext &, const QString &msg)
+{
+    const char *level = type == QtWarningMsg ? "W" : type == QtCriticalMsg || type == QtFatalMsg ? "E" : "I";
+    const QByteArray line = QStringLiteral("%1 %2 %3\n")
+                                .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")), QLatin1String(level), msg)
+                                .toUtf8();
+    fputs(line.constData(), stderr);
+    fflush(stderr);
+    if (g_logFile) {
+        g_logFile->write(line);
+        g_logFile->flush();
+    }
+    if (type == QtFatalMsg) {
+        abort();
+    }
+}
+
+void openLogFile()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/vkbd");
+    QDir().mkpath(dir);
+    auto *f = new QFile(dir + QStringLiteral("/vkbd.log"));
+    if (f->open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        g_logFile = f;
+    } else {
+        delete f;
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
+    // KWin starts its input method with WAYLAND_SOCKET pointing at a private
+    // connection. libwayland unsets the variable while connecting, so look
+    // before QApplication is constructed.
+    const bool launchedByKwin = qEnvironmentVariableIsSet("WAYLAND_SOCKET");
+
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("vkbd"));
     QCoreApplication::setApplicationName(QStringLiteral("vkbd"));
@@ -63,6 +110,8 @@ int main(int argc, char **argv)
         {QStringLiteral("show"), QStringLiteral("Show the running keyboard (starts it if needed).")},
         {QStringLiteral("hide"), QStringLiteral("Hide the running keyboard.")},
         {QStringLiteral("toggle"), QStringLiteral("Toggle the running keyboard (starts it if needed).")},
+        {QStringLiteral("quit"), QStringLiteral("Stop the running keyboard.")},
+        {QStringLiteral("doctor"), QStringLiteral("Print diagnostics about the KWin integration and exit.")},
         {QStringLiteral("backend"), QStringLiteral("Key injection backend: auto, im (KWin input method), uinput."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("shell"), QStringLiteral("Panel window role: auto, input-panel, layer-shell, plain."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("height"), QStringLiteral("Panel height as a fraction of the screen height (e.g. 0.4)."), QStringLiteral("fraction")},
@@ -72,6 +121,10 @@ int main(int argc, char **argv)
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
     });
     parser.process(app);
+
+    if (parser.isSet(QStringLiteral("doctor"))) {
+        return runDoctor();
+    }
 
     QSettings settings;
     const QString backend = parser.isSet(QStringLiteral("backend")) && parser.value(QStringLiteral("backend")) != QLatin1String("auto")
@@ -103,7 +156,7 @@ int main(int argc, char **argv)
         KeyboardWidget preview(&none);
         preview.setFunctionRowVisible(fnRow);
         preview.setKeymap(Keymap::fromSystemConfig());
-        preview.resize(panelSizeFor(nullptr, heightFraction).height() > 0 ? QSize(size.width(), qRound(size.height() * (heightFraction > 0 ? heightFraction : 0.42))) : size);
+        preview.resize(QSize(size.width(), qRound(size.height() * (heightFraction > 0 ? heightFraction : 0.42))));
         const bool ok = preview.grab().save(file);
         qInfo().noquote() << (ok ? "vkbd: wrote" : "vkbd: failed to write") << file << preview.size();
         return ok ? 0 : 1;
@@ -113,34 +166,59 @@ int main(int argc, char **argv)
     const bool wantShow = parser.isSet(QStringLiteral("show"));
     const bool wantHide = parser.isSet(QStringLiteral("hide"));
     const bool wantToggle = parser.isSet(QStringLiteral("toggle"));
+    const bool wantQuit = parser.isSet(QStringLiteral("quit"));
     QDBusConnection bus = QDBusConnection::sessionBus();
-    if (wantShow || wantHide || wantToggle) {
+    if (wantShow || wantHide || wantToggle || wantQuit) {
         QDBusInterface running(kService, QStringLiteral("/"), kInterface, bus);
         if (running.isValid()) {
-            running.call(wantHide ? QStringLiteral("hide") : wantShow ? QStringLiteral("show") : QStringLiteral("toggle"));
+            running.call(wantQuit ? QStringLiteral("quit") : wantHide ? QStringLiteral("hide") : wantShow ? QStringLiteral("show") : QStringLiteral("toggle"));
             return 0;
         }
-        if (wantHide) {
+        if (wantHide || wantQuit) {
             return 0;
         }
         // Not running yet: fall through and start, then show.
     }
 
-    if (!bus.registerService(kService)) {
-        qWarning() << "vkbd: another instance is already running (or the session bus is unavailable)";
-        return 1;
+    qInstallMessageHandler(messageHandler);
+
+    // ---- single instance --------------------------------------------------
+    // The instance KWin starts must win: a leftover manual instance would
+    // otherwise make KWin's one exit and the keyboard would never appear.
+    bool haveName = false;
+    if (bus.isConnected() && bus.interface()) {
+        const auto queue = launchedByKwin ? QDBusConnectionInterface::ReplaceExistingService : QDBusConnectionInterface::DontQueueService;
+        QDBusReply<QDBusConnectionInterface::RegisterServiceReply> reply = bus.interface()->registerService(kService, queue, QDBusConnectionInterface::AllowReplacement);
+        haveName = reply.isValid() && reply.value() == QDBusConnectionInterface::ServiceRegistered;
     }
+    if (!haveName) {
+        if (!launchedByKwin) {
+            qWarning() << "vkbd: another instance is already running; use --show/--hide/--toggle/--quit to control it";
+            return 1;
+        }
+        qWarning() << "vkbd: could not own the D-Bus name; continuing without D-Bus control";
+    }
+    // Only the instance that is going to run owns the log file, so a refused
+    // duplicate never wipes the log of the real one.
+    openLogFile();
+    qInfo().noquote() << "vkbd" << VKBD_VERSION << "pid" << getpid() << (launchedByKwin ? "started by KWin (input-method socket)" : "started standalone")
+                      << "platform" << app.platformName();
+    QDBusServiceWatcher nameWatcher(kService, bus, QDBusServiceWatcher::WatchForOwnerChange);
+    QObject::connect(&nameWatcher, &QDBusServiceWatcher::serviceOwnerChanged, &app,
+                     [&](const QString &, const QString &, const QString &newOwner) {
+                         if (haveName && !newOwner.isEmpty() && newOwner != bus.baseService()) {
+                             qInfo() << "vkbd: replaced by another instance (KWin started one), quitting";
+                             haveName = false;
+                             app.quit();
+                         }
+                     });
 
     const bool wayland = app.platformName().startsWith(QLatin1String("wayland"));
 
     // ---- key injection backends --------------------------------------------
     std::unique_ptr<UinputInjector> uinput;
     if (backend != QLatin1String("im")) {
-        uinput = std::make_unique<UinputInjector>();
-        if (!uinput->isReady()) {
-            qInfo().noquote() << "vkbd: uinput backend unavailable:" << uinput->error()
-                              << "(install data/60-vkbd-uinput.rules and add yourself to the 'input' group to enable it)";
-        }
+        uinput = std::make_unique<UinputInjector>(); // device is created on first use
     }
 
 #ifdef VKBD_HAVE_WAYLAND
@@ -151,8 +229,11 @@ int main(int argc, char **argv)
         im->initialize();
         if (im->isActive()) {
             imInjector = std::make_unique<InputMethodInjector>(im.get());
-            qInfo() << "vkbd: running as KWin's input method";
+            qInfo() << "vkbd: bound zwp_input_method_v1, running as KWin's input method";
         } else {
+            if (launchedByKwin) {
+                qWarning() << "vkbd: started by KWin but zwp_input_method_v1 is not offered on this connection";
+            }
             im.reset();
         }
     }
@@ -164,17 +245,13 @@ int main(int argc, char **argv)
         router.addBackend(imInjector.get());
     }
 #endif
-    if (uinput && uinput->isReady()) {
+    if (uinput) {
         router.addBackend(uinput.get());
-    }
-    if (!router.hasBackends()) {
-        qWarning() << "vkbd: no working input backend. Either configure vkbd as the virtual keyboard in"
-                   << "System Settings (Wayland) or grant access to /dev/uinput. Keys will be ignored.";
     }
 
     if (parser.isSet(QStringLiteral("self-test"))) {
         qInfo().noquote() << "platform:" << app.platformName();
-        qInfo().noquote() << "uinput:  " << (uinput ? (uinput->isReady() ? QStringLiteral("ready") : uinput->error()) : QStringLiteral("disabled"));
+        qInfo().noquote() << "uinput:  " << (uinput ? (uinput->open() ? QStringLiteral("ready") : uinput->error()) : QStringLiteral("disabled"));
 #ifdef VKBD_HAVE_WAYLAND
         qInfo().noquote() << "kwin-im: " << (im ? QStringLiteral("bound (launched by KWin)") : QStringLiteral("not available on this connection"));
 #else
@@ -207,13 +284,26 @@ int main(int argc, char **argv)
     LayerShellQt::Window *layerWindow = nullptr;
 #endif
 
+    bool haveIm = false;
+#ifdef VKBD_HAVE_WAYLAND
+    haveIm = im != nullptr;
+#endif
+
     if (wayland) {
         keyboard.winId(); // create the QWindow so a shell role can be attached before it is shown
 #ifdef VKBD_HAVE_INPUT_PANEL
-        const bool panelWanted = shell == QLatin1String("input-panel") || (shell == QLatin1String("auto") && im);
-        if (panelWanted && initInputPanelIntegration(keyboard.windowHandle())) {
-            mode = Controller::Mode::InputPanel;
-            qInfo() << "vkbd: using the input-panel surface role";
+        const bool panelWanted = shell == QLatin1String("input-panel") || (shell == QLatin1String("auto") && haveIm);
+        if (panelWanted) {
+            if (initInputPanelIntegration(keyboard.windowHandle())) {
+                mode = Controller::Mode::InputPanel;
+                qInfo() << "vkbd: using the input-panel surface role";
+            } else {
+                qWarning() << "vkbd: input-panel role unavailable, falling back to layer-shell";
+            }
+        }
+#else
+        if (haveIm) {
+            qWarning() << "vkbd: built without the input-panel role (Qt private headers missing); using layer-shell";
         }
 #endif
 #ifdef VKBD_HAVE_LAYER_SHELL
@@ -264,7 +354,14 @@ int main(int argc, char **argv)
 
     // ---- glue ----------------------------------------------------------------
     Controller controller(&keyboard, mode);
-    bus.registerObject(QStringLiteral("/"), &controller, QDBusConnection::ExportScriptableSlots);
+    controller.setStatusInfo(QStringLiteral("launchedByKwin=%1 im=%2 backendPreference=%3 pid=%4")
+                                 .arg(launchedByKwin ? QStringLiteral("yes") : QStringLiteral("no"),
+                                      haveIm ? QStringLiteral("bound") : QStringLiteral("none"),
+                                      backend,
+                                      QString::number(getpid())));
+    if (haveName) {
+        bus.registerObject(QStringLiteral("/"), &controller, QDBusConnection::ExportScriptableSlots);
+    }
     QObject::connect(&keyboard, &KeyboardWidget::hideRequested, &controller, &Controller::hide);
     QObject::connect(&keyboard, &KeyboardWidget::screenshotRequested, &controller, &Controller::screenshot);
 
@@ -278,17 +375,17 @@ int main(int argc, char **argv)
                 }
             });
             QObject::connect(ctx, &InputMethodContext::groupChanged, &keyboard, &KeyboardWidget::setLayoutGroup);
+            qInfo() << "vkbd: input method context activated";
             controller.imActivated();
         });
-        QObject::connect(im.get(), &InputMethod::deactivated, &controller, &Controller::imDeactivated);
+        QObject::connect(im.get(), &InputMethod::deactivated, &controller, [&] {
+            qInfo() << "vkbd: input method context deactivated";
+            controller.imDeactivated();
+        });
     }
 #endif
 
     std::unique_ptr<ToggleButton> toggleButton;
-    bool haveIm = false;
-#ifdef VKBD_HAVE_WAYLAND
-    haveIm = im != nullptr;
-#endif
     if (wantToggleButton || !haveIm) {
         toggleButton = std::make_unique<ToggleButton>();
         toggleButton->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
@@ -330,8 +427,11 @@ int main(int argc, char **argv)
         controller.show();
     }
 
-    qInfo().noquote() << "vkbd: backend =" << router.name() << ", shell ="
-                      << (mode == Controller::Mode::InputPanel ? "input-panel" : mode == Controller::Mode::LayerShell ? "layer-shell" : "plain");
+    qInfo().noquote() << "vkbd: ready, shell ="
+                      << (mode == Controller::Mode::InputPanel ? "input-panel" : mode == Controller::Mode::LayerShell ? "layer-shell" : "plain")
+                      << ", backends =" << (haveIm ? "wayland-im" : "") << (uinput ? "uinput(lazy)" : "");
 
-    return app.exec();
+    const int rc = app.exec();
+    qInfo() << "vkbd: exiting with" << rc;
+    return rc;
 }

@@ -21,12 +21,16 @@ public:
     Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent = nullptr);
 
     Mode mode() const { return m_mode; }
+    // Free-form "key=value ..." text reported by status() (set from main).
+    void setStatusInfo(const QString &info) { m_statusInfo = info; }
 
 public Q_SLOTS:
     Q_SCRIPTABLE void show();
     Q_SCRIPTABLE void hide();
     Q_SCRIPTABLE void toggle();
     Q_SCRIPTABLE bool isVisible() const;
+    Q_SCRIPTABLE QString status() const;
+    Q_SCRIPTABLE void quit();
     // Hide the panel, capture the screen to the clipboard with Spectacle,
     // then bring the panel back so Ctrl+V works right away.
     Q_SCRIPTABLE void screenshot();
@@ -42,6 +46,7 @@ private:
 
     KeyboardWidget *m_keyboard;
     Mode m_mode;
+    QString m_statusInfo;
     QTimer m_hideTimer;
     QTimer m_screenshotTimeout;
     bool m_screenshotInProgress = false;

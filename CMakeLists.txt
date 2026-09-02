@@ -26,6 +26,7 @@ add_executable(vkbd
     src/injector.cpp
     src/uinputinjector.cpp
     src/controller.cpp
+    src/doctor.cpp
 )
 target_include_directories(vkbd PRIVATE src)
 target_link_libraries(vkbd PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::DBus)
