@@ -32,7 +32,9 @@ Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
     m_hideTimer.setSingleShot(true);
     m_hideTimer.setInterval(250);
     connect(&m_hideTimer, &QTimer::timeout, this, [this] {
-        m_keyboard->hide();
+        if (!m_screenshotInProgress) {
+            m_keyboard->hide();
+        }
     });
     m_screenshotTimeout.setSingleShot(true);
     m_screenshotTimeout.setInterval(kScreenshotTimeoutMs);
@@ -203,7 +205,9 @@ void Controller::imActivated()
 void Controller::imDeactivated()
 {
     m_keyboard->releaseAll();
-    if (m_mode != Mode::InputPanel) {
-        m_hideTimer.start();
-    }
+    // Unmap once focus has really left a text field. KWin does not hide an
+    // input panel on its own when focus moves to a window without text input
+    // (the desktop, a file manager ...); Maliit and plasma-keyboard unmap too,
+    // and KWin re-shows the surface when it is mapped again on activation.
+    m_hideTimer.start();
 }
