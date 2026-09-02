@@ -167,7 +167,7 @@ PageDef Layout::fullPage(bool withFunctionRow)
         sp("↑", KEY_UP, 2.0f),
     }});
 
-    page.rows.push_back(RowDef{{
+    RowDef bottom{{
         mod("Ctrl", KEY_LEFTCTRL, 1.25f),
         mod("Meta", KEY_LEFTMETA, 1.25f),
         mod("Alt", KEY_LEFTALT, 1.25f),
@@ -175,7 +175,13 @@ PageDef Layout::fullPage(bool withFunctionRow)
         mod("AltGr", KEY_RIGHTALT, 1.0f),
         act("Fn", KeyAction::PageFn, 1.0f),
         sp("←", KEY_LEFT), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
-    }});
+    }};
+    if (!withFunctionRow) {
+        // The hide key normally lives in the function row.
+        bottom.keys[3].width = 5.25f;
+        bottom.keys.push_back(act("⌄", KeyAction::Hide));
+    }
+    page.rows.push_back(bottom);
 
     return page;
 }

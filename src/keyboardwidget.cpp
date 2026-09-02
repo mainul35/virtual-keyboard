@@ -545,6 +545,41 @@ void KeyboardWidget::paintEvent(QPaintEvent *e)
     }
 }
 
+// A small keyboard outline with a chevron underneath: "put the keyboard away".
+void KeyboardWidget::paintHideGlyph(QPainter &p, const QRectF &r, const QColor &color)
+{
+    const qreal size = std::min(r.width() * 0.55, r.height() * 0.6);
+    const qreal kbW = size;
+    const qreal kbH = size * 0.5;
+    const qreal cx = r.center().x();
+    const qreal top = r.center().y() - size * 0.42;
+    const QRectF kb(cx - kbW / 2, top, kbW, kbH);
+    const qreal stroke = std::max(1.5, size * 0.07);
+
+    p.setPen(QPen(color, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(kb, size * 0.08, size * 0.08);
+
+    // Two rows of "keys" and a space bar.
+    const qreal dot = std::max(1.5, size * 0.07);
+    p.setPen(QPen(color, dot, Qt::SolidLine, Qt::RoundCap));
+    for (int row = 0; row < 2; ++row) {
+        const qreal y = kb.top() + kbH * (0.3 + row * 0.25);
+        for (int i = 0; i < 5; ++i) {
+            const qreal x = kb.left() + kbW * (0.18 + i * 0.16);
+            p.drawPoint(QPointF(x, y));
+        }
+    }
+    p.drawLine(QPointF(kb.left() + kbW * 0.3, kb.bottom() - kbH * 0.2), QPointF(kb.right() - kbW * 0.3, kb.bottom() - kbH * 0.2));
+
+    // Chevron pointing down.
+    const qreal chevY = kb.bottom() + size * 0.14;
+    const qreal chevW = size * 0.22;
+    const qreal chevH = size * 0.14;
+    p.setPen(QPen(color, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawPolyline(QPolygonF({QPointF(cx - chevW, chevY), QPointF(cx, chevY + chevH), QPointF(cx + chevW, chevY)}));
+}
+
 void KeyboardWidget::paintKey(QPainter &p, int idx)
 {
     const KeySlot &slot = m_slots[idx];
@@ -592,6 +627,11 @@ void KeyboardWidget::paintKey(QPainter &p, int idx)
     p.setPen(border);
     p.setBrush(fill);
     p.drawRoundedRect(r, radius, radius);
+
+    if (def.kind == KeyKind::Action && def.action == KeyAction::Hide) {
+        paintHideGlyph(p, r, text);
+        return;
+    }
 
     const bool shifted = shiftActive() || (m_capsLock && Layout::isLetterCode(def.code));
     const QString label = labelFor(def, shifted);

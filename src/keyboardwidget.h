@@ -87,6 +87,7 @@ private:
     bool modifierEngaged(int code) const;
     QString labelFor(const KeyDef &def, bool shifted) const;
     void paintKey(QPainter &p, int idx);
+    void paintHideGlyph(QPainter &p, const QRectF &r, const QColor &color);
     void updateSlotsWithCode(int code);
     void updateAllCharKeys();
 
