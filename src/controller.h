@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include <functional>
 
 class KeyboardWidget;
 
@@ -23,6 +24,9 @@ public:
     Mode mode() const { return m_mode; }
     // Free-form "key=value ..." text reported by status() (set from main).
     void setStatusInfo(const QString &info) { m_statusInfo = info; }
+    // Called right after the panel window is shown (used to attach the
+    // compositor slide animation once the surface exists).
+    void setAfterShowHook(std::function<void()> hook) { m_afterShow = std::move(hook); }
 
 public Q_SLOTS:
     Q_SCRIPTABLE void show();
@@ -43,10 +47,12 @@ private:
     void kwinForceActivate();
     void kwinDeactivate();
     void finishScreenshot();
+    void showPanel();
 
     KeyboardWidget *m_keyboard;
     Mode m_mode;
     QString m_statusInfo;
+    std::function<void()> m_afterShow;
     QTimer m_hideTimer;
     QTimer m_screenshotTimeout;
     bool m_screenshotInProgress = false;

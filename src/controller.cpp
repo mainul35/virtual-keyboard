@@ -90,7 +90,7 @@ void Controller::finishScreenshot()
     m_screenshotInProgress = false;
     m_screenshotTimeout.stop();
     if (m_wasVisibleBeforeScreenshot) {
-        m_keyboard->show();
+        showPanel();
         if (m_mode == Mode::InputPanel) {
             kwinForceActivate(); // make sure KWin shows the re-mapped panel
         }
@@ -126,20 +126,22 @@ void Controller::kwinDeactivate()
     kwin.setProperty("active", false);
 }
 
+void Controller::showPanel()
+{
+    if (!m_keyboard->isVisible()) {
+        m_keyboard->show();
+    }
+    if (m_afterShow) {
+        m_afterShow();
+    }
+}
+
 void Controller::show()
 {
     m_hideTimer.stop();
-    switch (m_mode) {
-    case Mode::InputPanel:
-        if (!m_keyboard->isVisible()) {
-            m_keyboard->show();
-        }
+    showPanel();
+    if (m_mode == Mode::InputPanel) {
         kwinForceActivate();
-        break;
-    case Mode::LayerShell:
-    case Mode::Plain:
-        m_keyboard->show();
-        break;
     }
 }
 
@@ -188,18 +190,8 @@ void Controller::quit()
 void Controller::imActivated()
 {
     m_hideTimer.stop();
-    switch (m_mode) {
-    case Mode::InputPanel:
-        // KWin decides whether the panel is shown; we only need to be mapped.
-        if (!m_keyboard->isVisible()) {
-            m_keyboard->show();
-        }
-        break;
-    case Mode::LayerShell:
-    case Mode::Plain:
-        m_keyboard->show();
-        break;
-    }
+    // In input-panel mode KWin decides whether the mapped panel is shown.
+    showPanel();
 }
 
 void Controller::imDeactivated()

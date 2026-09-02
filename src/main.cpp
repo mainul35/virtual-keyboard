@@ -37,6 +37,9 @@
 #ifdef VKBD_HAVE_LAYER_SHELL
 #include <LayerShellQt/Window>
 #endif
+#ifdef VKBD_HAVE_SLIDE
+#include "wayland/slide.h"
+#endif
 
 namespace {
 
@@ -418,6 +421,11 @@ int main(int argc, char **argv)
     if (haveName) {
         bus.registerObject(QStringLiteral("/"), &controller, QDBusConnection::ExportScriptableSlots);
     }
+#ifdef VKBD_HAVE_SLIDE
+    if (wayland) {
+        controller.setAfterShowHook([&] { applySlideFromBottom(keyboard.windowHandle()); });
+    }
+#endif
     QObject::connect(&keyboard, &KeyboardWidget::hideRequested, &controller, &Controller::hide);
     QObject::connect(&keyboard, &KeyboardWidget::screenshotRequested, &controller, &Controller::screenshot);
 
@@ -461,18 +469,9 @@ int main(int argc, char **argv)
     }
 
     // ---- initial visibility -------------------------------------------------
-    switch (mode) {
-    case Controller::Mode::InputPanel:
-        keyboard.show(); // mapped; KWin decides when it is actually visible
-        break;
-    case Controller::Mode::LayerShell:
-    case Controller::Mode::Plain:
-        if (!haveIm || wantShow || wantToggle) {
-            keyboard.show();
-        }
-        break;
-    }
-    if ((wantShow || wantToggle) && mode == Controller::Mode::InputPanel) {
+    // With an input-method connection the panel stays unmapped until KWin
+    // activates us for a text field; otherwise it is shown right away.
+    if (!haveIm || wantShow || wantToggle) {
         controller.show();
     }
 

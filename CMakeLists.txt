@@ -63,6 +63,7 @@ if(VKBD_WAYLAND)
             ${_vkbd_scanner_opts}
             NO_INCLUDE_CORE_ONLY
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/protocols/input-method-unstable-v1.xml
+                  ${CMAKE_CURRENT_SOURCE_DIR}/protocols/slide.xml
         )
         target_sources(vkbd PRIVATE src/wayland/inputmethod.cpp)
         target_link_libraries(vkbd PRIVATE Qt6::WaylandClient PkgConfig::WAYLAND_CLIENT)
@@ -96,7 +97,7 @@ if(VKBD_WAYLAND_ENABLED AND VKBD_INPUT_PANEL)
         NO_DEFAULT_PATH
     )
     if(_vkbd_panel_hdr)
-        target_sources(vkbd PRIVATE src/wayland/inputpanelshell.cpp)
+        target_sources(vkbd PRIVATE src/wayland/inputpanelshell.cpp src/wayland/slide.cpp)
         if(TARGET Qt6::WaylandClientPrivate)
             target_link_libraries(vkbd PRIVATE Qt6::WaylandClientPrivate)
         else()
@@ -107,7 +108,7 @@ if(VKBD_WAYLAND_ENABLED AND VKBD_INPUT_PANEL)
         else()
             target_include_directories(vkbd PRIVATE ${Qt6Gui_PRIVATE_INCLUDE_DIRS})
         endif()
-        target_compile_definitions(vkbd PRIVATE VKBD_HAVE_INPUT_PANEL=1)
+        target_compile_definitions(vkbd PRIVATE VKBD_HAVE_INPUT_PANEL=1 VKBD_HAVE_SLIDE=1)
         message(STATUS "vkbd: input-panel surface role enabled (Qt private API, ${_vkbd_panel_hdr})")
     else()
         message(WARNING "vkbd: Qt WaylandClient private headers not found (install qt6-wayland private/devel package); "
