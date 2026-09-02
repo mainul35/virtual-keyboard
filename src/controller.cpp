@@ -55,7 +55,8 @@ void Controller::screenshot()
 
     m_screenshotInProgress = true;
     m_wasVisibleBeforeScreenshot = isVisible();
-    hide();
+    m_keyboard->releaseAll();
+    m_keyboard->hide(); // just unmap; keep the input-method context alive
 
     QTimer::singleShot(kScreenshotHideDelayMs, this, [this, spectacle] {
         auto *proc = new QProcess(this);
@@ -87,7 +88,10 @@ void Controller::finishScreenshot()
     m_screenshotInProgress = false;
     m_screenshotTimeout.stop();
     if (m_wasVisibleBeforeScreenshot) {
-        show();
+        m_keyboard->show();
+        if (m_mode == Mode::InputPanel) {
+            kwinForceActivate(); // make sure KWin shows the re-mapped panel
+        }
     }
 }
 
@@ -141,14 +145,12 @@ void Controller::hide()
 {
     m_hideTimer.stop();
     m_keyboard->releaseAll();
-    switch (m_mode) {
-    case Mode::InputPanel:
+    // Unmapping the surface is what actually removes the panel from the screen.
+    // In input-panel mode also deactivate the context, so that tapping the
+    // same text field again re-activates it and brings the keyboard back.
+    m_keyboard->hide();
+    if (m_mode == Mode::InputPanel) {
         kwinDeactivate();
-        break;
-    case Mode::LayerShell:
-    case Mode::Plain:
-        m_keyboard->hide();
-        break;
     }
 }
 

@@ -116,6 +116,9 @@ shell=auto
 * **Hold** with one finger and tap keys with another: behaves like a physical key.
 * Held keys auto-repeat (arrows, Backspace) because the app receives a real key
   press and release.
+* In terminals (Konsole, QMLKonsole) Ctrl+C interrupts the running program;
+  copy and paste there are **Ctrl+Shift+C** and **Ctrl+Shift+V**, exactly as
+  with a hardware keyboard.
 
 ## Layout of the source
 
