@@ -28,7 +28,9 @@ libraries with the rest of Plasma.
 
 ## Building
 
-Dependencies (names for Debian/Ubuntu/neon; Fedora and Arch equivalents in brackets):
+`./install.sh` installs these for you on apt, dnf, pacman and zypper based
+distros. Dependencies (names for Debian/Ubuntu/neon; Fedora and Arch equivalents
+in brackets):
 
 ```
 cmake ninja-build g++ pkg-config
