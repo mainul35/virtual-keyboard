@@ -7,8 +7,11 @@ you everything the stock Maliit keyboard leaves out:
 * **Arrow keys**, Home/End/PgUp/PgDn, Insert, **Delete**, **Esc**
 * **Ctrl, Alt, AltGr, Meta and Shift** with tap-to-latch, double-tap-to-lock and
   hold-and-type behaviour, so Ctrl+C, Alt+Tab, Ctrl+Alt+T, Shift+arrows all work
-* **F1–F12** on the main page, plus PrtSc/ScrLk/Pause/Menu, volume and brightness
+* **F1–F12** on the main page, plus ScrLk/Pause/Menu, volume and brightness
   keys on the Fn page
+* **PrtSc** takes a full-screen screenshot with Spectacle and puts it on the
+  clipboard, hiding the keyboard for the capture and bringing it back so you can
+  Ctrl+V straight away (falls back to the real Print key if Spectacle is missing)
 * Caps Lock, Tab, a full US-PC layout; key labels follow your real xkb layout
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
   focus leaves, and it never steals focus from the app you are typing into

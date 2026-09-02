@@ -29,8 +29,12 @@ public:
     // is hidden or the compositor deactivates us).
     void releaseAll();
 
+    // Press and release a keycode through the injector (used for fallbacks).
+    void tapKey(int code);
+
 Q_SIGNALS:
     void hideRequested();
+    void screenshotRequested();
 
 protected:
     bool event(QEvent *e) override;

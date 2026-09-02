@@ -266,6 +266,7 @@ int main(int argc, char **argv)
     Controller controller(&keyboard, mode);
     bus.registerObject(QStringLiteral("/"), &controller, QDBusConnection::ExportScriptableSlots);
     QObject::connect(&keyboard, &KeyboardWidget::hideRequested, &controller, &Controller::hide);
+    QObject::connect(&keyboard, &KeyboardWidget::screenshotRequested, &controller, &Controller::screenshot);
 
 #ifdef VKBD_HAVE_WAYLAND
     if (im) {

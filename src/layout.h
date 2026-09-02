@@ -19,6 +19,7 @@ enum class KeyAction {
     Hide,
     PageFn,
     PageMain,
+    Screenshot, // capture the screen to the clipboard (hides the panel first)
 };
 
 struct KeyDef {

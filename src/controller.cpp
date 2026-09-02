@@ -6,12 +6,19 @@
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QDebug>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QVariant>
+
+#include <linux/input-event-codes.h>
 
 namespace {
 const auto kKwinService = QStringLiteral("org.kde.KWin");
 const auto kKwinPath = QStringLiteral("/VirtualKeyboard");
 const auto kKwinIface = QStringLiteral("org.kde.kwin.VirtualKeyboard");
+// Give the compositor a frame or two to actually unmap the panel before capturing.
+constexpr int kScreenshotHideDelayMs = 350;
+constexpr int kScreenshotTimeoutMs = 8000;
 }
 
 Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
@@ -26,6 +33,61 @@ Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
     connect(&m_hideTimer, &QTimer::timeout, this, [this] {
         m_keyboard->hide();
     });
+    m_screenshotTimeout.setSingleShot(true);
+    m_screenshotTimeout.setInterval(kScreenshotTimeoutMs);
+    connect(&m_screenshotTimeout, &QTimer::timeout, this, &Controller::finishScreenshot);
+}
+
+void Controller::screenshot()
+{
+    if (m_screenshotInProgress) {
+        return;
+    }
+    const QString spectacle = QStandardPaths::findExecutable(QStringLiteral("spectacle"));
+    if (spectacle.isEmpty()) {
+        // No Spectacle: send the real Print key and let the session's own
+        // shortcut handle it (works on the uinput path).
+        qWarning() << "vkbd: spectacle not found, sending Print key instead";
+        m_keyboard->tapKey(KEY_SYSRQ);
+        return;
+    }
+
+    m_screenshotInProgress = true;
+    m_wasVisibleBeforeScreenshot = isVisible();
+    hide();
+
+    QTimer::singleShot(kScreenshotHideDelayMs, this, [this, spectacle] {
+        auto *proc = new QProcess(this);
+        // -b: no GUI, -f: full screen, -c: copy image to clipboard, -n: quiet
+        proc->setProgram(spectacle);
+        proc->setArguments({QStringLiteral("-b"), QStringLiteral("-f"), QStringLiteral("-c")});
+        connect(proc, &QProcess::finished, this, [this, proc](int code, QProcess::ExitStatus) {
+            if (code != 0) {
+                qWarning() << "vkbd: spectacle exited with" << code;
+            }
+            proc->deleteLater();
+            finishScreenshot();
+        });
+        connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError err) {
+            qWarning() << "vkbd: could not run spectacle:" << err;
+            proc->deleteLater();
+            finishScreenshot();
+        });
+        m_screenshotTimeout.start();
+        proc->start();
+    });
+}
+
+void Controller::finishScreenshot()
+{
+    if (!m_screenshotInProgress) {
+        return;
+    }
+    m_screenshotInProgress = false;
+    m_screenshotTimeout.stop();
+    if (m_wasVisibleBeforeScreenshot) {
+        show();
+    }
 }
 
 bool Controller::kwinPanelVisible() const

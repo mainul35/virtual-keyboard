@@ -362,11 +362,21 @@ void KeyboardWidget::releaseSlot(int idx)
             rebuildSlots();
             update();
             break;
+        case KeyAction::Screenshot:
+            releaseLatchedModifiers();
+            Q_EMIT screenshotRequested();
+            break;
         case KeyAction::None:
             break;
         }
         break;
     }
+}
+
+void KeyboardWidget::tapKey(int code)
+{
+    inject(code, true);
+    inject(code, false);
 }
 
 void KeyboardWidget::releaseAll()

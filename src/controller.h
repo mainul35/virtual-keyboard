@@ -27,6 +27,9 @@ public Q_SLOTS:
     Q_SCRIPTABLE void hide();
     Q_SCRIPTABLE void toggle();
     Q_SCRIPTABLE bool isVisible() const;
+    // Hide the panel, capture the screen to the clipboard with Spectacle,
+    // then bring the panel back so Ctrl+V works right away.
+    Q_SCRIPTABLE void screenshot();
 
     void imActivated();
     void imDeactivated();
@@ -35,8 +38,12 @@ private:
     bool kwinPanelVisible() const;
     void kwinForceActivate();
     void kwinDeactivate();
+    void finishScreenshot();
 
     KeyboardWidget *m_keyboard;
     Mode m_mode;
     QTimer m_hideTimer;
+    QTimer m_screenshotTimeout;
+    bool m_screenshotInProgress = false;
+    bool m_wasVisibleBeforeScreenshot = false;
 };

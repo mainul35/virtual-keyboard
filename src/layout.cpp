@@ -58,7 +58,8 @@ PageDef Layout::mainPage(bool withFunctionRow)
             sp("F1", KEY_F1), sp("F2", KEY_F2), sp("F3", KEY_F3), sp("F4", KEY_F4),
             sp("F5", KEY_F5), sp("F6", KEY_F6), sp("F7", KEY_F7), sp("F8", KEY_F8),
             sp("F9", KEY_F9), sp("F10", KEY_F10), sp("F11", KEY_F11), sp("F12", KEY_F12),
-            sp("Del", KEY_DELETE, 2.0f),
+            act("PrtSc", KeyAction::Screenshot),
+            sp("Del", KEY_DELETE),
         };
         page.rows.push_back(fn);
     }
@@ -118,7 +119,7 @@ PageDef Layout::fnPage()
         sp("Esc", KEY_ESC),
         sp("Home", KEY_HOME), sp("End", KEY_END), sp("PgUp", KEY_PAGEUP), sp("PgDn", KEY_PAGEDOWN),
         sp("Ins", KEY_INSERT), sp("Del", KEY_DELETE),
-        sp("PrtSc", KEY_SYSRQ), sp("ScrLk", KEY_SCROLLLOCK), sp("Pause", KEY_PAUSE), sp("Menu", KEY_COMPOSE),
+        act("PrtSc", KeyAction::Screenshot), sp("ScrLk", KEY_SCROLLLOCK), sp("Pause", KEY_PAUSE), sp("Menu", KEY_COMPOSE),
     }});
 
     page.rows.push_back(RowDef{{
