@@ -6,33 +6,101 @@ namespace {
 
 KeyDef ch(const char *label, const char *shift, int code, float w = 1.0f)
 {
-    return KeyDef{QString::fromUtf8(label), QString::fromUtf8(shift), code, w, KeyKind::Char, KeyAction::None};
+    KeyDef k;
+    k.label = QString::fromUtf8(label);
+    k.shiftLabel = QString::fromUtf8(shift);
+    k.code = code;
+    k.width = w;
+    return k;
 }
 
 KeyDef letter(char c, int code)
 {
     const QChar lower = QChar::fromLatin1(c);
-    return KeyDef{QString(lower), QString(lower.toUpper()), code, 1.0f, KeyKind::Char, KeyAction::None};
+    KeyDef k;
+    k.label = QString(lower);
+    k.shiftLabel = QString(lower.toUpper());
+    k.code = code;
+    return k;
+}
+
+// A symbol reached through Shift on a US layout, shown with a fixed label.
+KeyDef sym(const char *label, int code, bool shift, float w = 1.0f)
+{
+    KeyDef k;
+    k.label = QString::fromUtf8(label);
+    k.code = code;
+    k.width = w;
+    k.withShift = shift;
+    k.keymapLabel = false;
+    return k;
 }
 
 KeyDef sp(const char *label, int code, float w = 1.0f)
 {
-    return KeyDef{QString::fromUtf8(label), {}, code, w, KeyKind::Special, KeyAction::None};
+    KeyDef k;
+    k.label = QString::fromUtf8(label);
+    k.code = code;
+    k.width = w;
+    k.kind = KeyKind::Special;
+    return k;
 }
 
 KeyDef mod(const char *label, int code, float w = 1.0f)
 {
-    return KeyDef{QString::fromUtf8(label), {}, code, w, KeyKind::Modifier, KeyAction::None};
-}
-
-KeyDef lock(const char *label, int code, float w = 1.0f)
-{
-    return KeyDef{QString::fromUtf8(label), {}, code, w, KeyKind::Lock, KeyAction::None};
+    KeyDef k;
+    k.label = QString::fromUtf8(label);
+    k.code = code;
+    k.width = w;
+    k.kind = KeyKind::Modifier;
+    return k;
 }
 
 KeyDef act(const char *label, KeyAction a, float w = 1.0f)
 {
-    return KeyDef{QString::fromUtf8(label), {}, 0, w, KeyKind::Action, a};
+    KeyDef k;
+    k.label = QString::fromUtf8(label);
+    k.width = w;
+    k.kind = KeyKind::Action;
+    k.action = a;
+    return k;
+}
+
+RowDef numberRow()
+{
+    return RowDef{{
+        ch("1", "!", KEY_1), ch("2", "@", KEY_2), ch("3", "#", KEY_3), ch("4", "$", KEY_4),
+        ch("5", "%", KEY_5), ch("6", "^", KEY_6), ch("7", "&", KEY_7), ch("8", "*", KEY_8),
+        ch("9", "(", KEY_9), ch("0", ")", KEY_0),
+    }};
+}
+
+// Esc Tab Ctrl Alt Fn  ← ↑ ↓ →  Del : the keys a terminal user misses most.
+RowDef utilityRow()
+{
+    RowDef r;
+    r.height = 0.8f;
+    r.keys = {
+        sp("Esc", KEY_ESC), sp("Tab", KEY_TAB),
+        mod("Ctrl", KEY_LEFTCTRL), mod("Alt", KEY_LEFTALT),
+        act("Fn", KeyAction::PageFn),
+        sp("←", KEY_LEFT), sp("↑", KEY_UP), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
+        sp("Del", KEY_DELETE),
+        act("⌄", KeyAction::Hide),
+    };
+    return r;
+}
+
+RowDef compactBottomRow(KeyAction pageKey, const char *pageLabel)
+{
+    // Space takes the middle half of the row so either thumb reaches it.
+    return RowDef{{
+        act(pageLabel, pageKey, 1.5f),
+        sym(",", KEY_COMMA, false, 1.0f),
+        sp("", KEY_SPACE, 5.0f),
+        sym(".", KEY_DOT, false, 1.0f),
+        sp("⏎", KEY_ENTER, 1.5f),
+    }};
 }
 
 } // namespace
@@ -46,7 +114,9 @@ float PageDef::totalHeight() const
     return h;
 }
 
-PageDef Layout::mainPage(bool withFunctionRow)
+// ------------------------------------------------------------- full (PC) --
+
+PageDef Layout::fullPage(bool withFunctionRow)
 {
     PageDef page;
 
@@ -60,6 +130,7 @@ PageDef Layout::mainPage(bool withFunctionRow)
             sp("F9", KEY_F9), sp("F10", KEY_F10), sp("F11", KEY_F11), sp("F12", KEY_F12),
             act("PrtSc", KeyAction::Screenshot),
             sp("Del", KEY_DELETE),
+            act("⌄", KeyAction::Hide),
         };
         page.rows.push_back(fn);
     }
@@ -81,7 +152,7 @@ PageDef Layout::mainPage(bool withFunctionRow)
     }});
 
     page.rows.push_back(RowDef{{
-        lock("Caps", KEY_CAPSLOCK, 1.75f),
+        sp("Del", KEY_DELETE, 1.75f),
         letter('a', KEY_A), letter('s', KEY_S), letter('d', KEY_D), letter('f', KEY_F), letter('g', KEY_G),
         letter('h', KEY_H), letter('j', KEY_J), letter('k', KEY_K), letter('l', KEY_L),
         ch(";", ":", KEY_SEMICOLON), ch("'", "\"", KEY_APOSTROPHE),
@@ -89,27 +160,106 @@ PageDef Layout::mainPage(bool withFunctionRow)
     }});
 
     page.rows.push_back(RowDef{{
-        mod("Shift", KEY_LEFTSHIFT, 2.0f),
+        mod("Shift", KEY_LEFTSHIFT, 3.0f),
         letter('z', KEY_Z), letter('x', KEY_X), letter('c', KEY_C), letter('v', KEY_V), letter('b', KEY_B),
         letter('n', KEY_N), letter('m', KEY_M),
         ch(",", "<", KEY_COMMA), ch(".", ">", KEY_DOT), ch("/", "?", KEY_SLASH),
-        mod("Shift", KEY_RIGHTSHIFT, 1.75f),
-        sp("↑", KEY_UP, 1.25f),
+        sp("↑", KEY_UP, 2.0f),
     }});
 
     page.rows.push_back(RowDef{{
         mod("Ctrl", KEY_LEFTCTRL, 1.25f),
         mod("Meta", KEY_LEFTMETA, 1.25f),
         mod("Alt", KEY_LEFTALT, 1.25f),
-        sp("", KEY_SPACE, 5.25f),
+        sp("", KEY_SPACE, 6.25f),
         mod("AltGr", KEY_RIGHTALT, 1.0f),
         act("Fn", KeyAction::PageFn, 1.0f),
         sp("←", KEY_LEFT), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
-        act("⌄", KeyAction::Hide, 1.0f),
     }});
 
     return page;
 }
+
+// -------------------------------------------------------- compact (phone) --
+
+PageDef Layout::compactPage()
+{
+    PageDef page;
+    page.rows.push_back(utilityRow());
+    page.rows.push_back(numberRow());
+
+    page.rows.push_back(RowDef{{
+        letter('q', KEY_Q), letter('w', KEY_W), letter('e', KEY_E), letter('r', KEY_R), letter('t', KEY_T),
+        letter('y', KEY_Y), letter('u', KEY_U), letter('i', KEY_I), letter('o', KEY_O), letter('p', KEY_P),
+    }});
+
+    RowDef home{{
+        letter('a', KEY_A), letter('s', KEY_S), letter('d', KEY_D), letter('f', KEY_F), letter('g', KEY_G),
+        letter('h', KEY_H), letter('j', KEY_J), letter('k', KEY_K), letter('l', KEY_L),
+    }};
+    home.leftPad = 0.5f;
+    home.rightPad = 0.5f;
+    page.rows.push_back(home);
+
+    page.rows.push_back(RowDef{{
+        mod("⇧", KEY_LEFTSHIFT, 1.5f),
+        letter('z', KEY_Z), letter('x', KEY_X), letter('c', KEY_C), letter('v', KEY_V), letter('b', KEY_B),
+        letter('n', KEY_N), letter('m', KEY_M),
+        sp("⌫", KEY_BACKSPACE, 1.5f),
+    }});
+
+    page.rows.push_back(compactBottomRow(KeyAction::PageSymbols, "?123"));
+    return page;
+}
+
+PageDef Layout::symbolsPage()
+{
+    PageDef page;
+    page.rows.push_back(utilityRow());
+    page.rows.push_back(numberRow());
+
+    page.rows.push_back(RowDef{{
+        sym("@", KEY_2, true), sym("#", KEY_3, true), sym("$", KEY_4, true), sym("%", KEY_5, true),
+        sym("&", KEY_7, true), sym("-", KEY_MINUS, false), sym("+", KEY_EQUAL, true),
+        sym("(", KEY_9, true), sym(")", KEY_0, true), sym("/", KEY_SLASH, false),
+    }});
+
+    page.rows.push_back(RowDef{{
+        act("=\\<", KeyAction::PageSymbols2, 1.5f),
+        sym("*", KEY_8, true), sym("\"", KEY_APOSTROPHE, true), sym("'", KEY_APOSTROPHE, false),
+        sym(":", KEY_SEMICOLON, true), sym(";", KEY_SEMICOLON, false),
+        sym("!", KEY_1, true), sym("?", KEY_SLASH, true),
+        sp("⌫", KEY_BACKSPACE, 1.5f),
+    }});
+
+    page.rows.push_back(compactBottomRow(KeyAction::PageMain, "ABC"));
+    return page;
+}
+
+PageDef Layout::symbols2Page()
+{
+    PageDef page;
+    page.rows.push_back(utilityRow());
+    page.rows.push_back(numberRow());
+
+    page.rows.push_back(RowDef{{
+        sym("~", KEY_GRAVE, true), sym("`", KEY_GRAVE, false), sym("^", KEY_6, true), sym("_", KEY_MINUS, true),
+        sym("=", KEY_EQUAL, false), sym("{", KEY_LEFTBRACE, true), sym("}", KEY_RIGHTBRACE, true),
+        sym("[", KEY_LEFTBRACE, false), sym("]", KEY_RIGHTBRACE, false), sym("\\", KEY_BACKSLASH, false),
+    }});
+
+    page.rows.push_back(RowDef{{
+        act("?123", KeyAction::PageSymbols, 1.5f),
+        sym("|", KEY_BACKSLASH, true), sym("<", KEY_COMMA, true), sym(">", KEY_DOT, true),
+        sym("-", KEY_MINUS, false), sym("+", KEY_EQUAL, true), sym("*", KEY_8, true), sym("/", KEY_SLASH, false),
+        sp("⌫", KEY_BACKSPACE, 1.5f),
+    }});
+
+    page.rows.push_back(compactBottomRow(KeyAction::PageMain, "ABC"));
+    return page;
+}
+
+// ------------------------------------------------------------------- Fn --
 
 PageDef Layout::fnPage()
 {
@@ -140,10 +290,9 @@ PageDef Layout::fnPage()
         mod("Ctrl", KEY_LEFTCTRL, 1.5f),
         mod("Alt", KEY_LEFTALT, 1.5f),
         mod("Meta", KEY_LEFTMETA, 1.5f),
-        sp("Enter", KEY_ENTER, 1.5f),
         sp("⌫", KEY_BACKSPACE, 1.5f),
-        sp("↑", KEY_UP),
-        sp("", KEY_SPACE, 2.0f),
+        sp("↑", KEY_UP, 1.5f),
+        sp("⏎", KEY_ENTER, 2.0f),
     }});
 
     page.rows.push_back(RowDef{{

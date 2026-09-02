@@ -11,6 +11,7 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#include <QDBusReply>
 #include <QDBusServiceWatcher>
 #include <QDateTime>
 #include <QDebug>
@@ -22,6 +23,7 @@
 #include <QWindow>
 
 #include <cstdio>
+#include <functional>
 #include <linux/input-event-codes.h>
 #include <memory>
 #include <unistd.h>
@@ -84,6 +86,22 @@ void openLogFile()
     }
 }
 
+// Receives org.kde.KeyboardLayouts.layoutChanged so labels and the IM
+// modifiers request follow the active xkb layout group.
+class LayoutWatcher : public QObject
+{
+    Q_OBJECT
+public:
+    std::function<void(int)> onChange;
+public Q_SLOTS:
+    void layoutChanged(uint index)
+    {
+        if (onChange) {
+            onChange(static_cast<int>(index));
+        }
+    }
+};
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -115,7 +133,8 @@ int main(int argc, char **argv)
         {QStringLiteral("backend"), QStringLiteral("Key injection backend: auto, im (KWin input method), uinput."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("shell"), QStringLiteral("Panel window role: auto, input-panel, layer-shell, plain."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("height"), QStringLiteral("Panel height as a fraction of the screen height (e.g. 0.4)."), QStringLiteral("fraction")},
-        {QStringLiteral("no-fn-row"), QStringLiteral("Hide the Esc/F1-F12/Del row on the main page.")},
+        {QStringLiteral("layout"), QStringLiteral("Key layout: auto (compact in portrait, full in landscape), compact, full."), QStringLiteral("name"), QStringLiteral("auto")},
+        {QStringLiteral("no-fn-row"), QStringLiteral("Hide the Esc/F1-F12/Del row of the full layout.")},
         {QStringLiteral("toggle-button"), QStringLiteral("Always show the floating show/hide button.")},
         {QStringLiteral("self-test"), QStringLiteral("Report which input backends work, press/release Shift once, and exit.")},
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
@@ -137,6 +156,13 @@ int main(int argc, char **argv)
         ? parser.value(QStringLiteral("height")).toDouble()
         : settings.value(QStringLiteral("height"), 0.0).toDouble();
     const bool fnRow = parser.isSet(QStringLiteral("no-fn-row")) ? false : settings.value(QStringLiteral("fnRow"), true).toBool();
+    const QString layoutName = parser.isSet(QStringLiteral("layout")) && parser.value(QStringLiteral("layout")) != QLatin1String("auto")
+        ? parser.value(QStringLiteral("layout"))
+        : settings.value(QStringLiteral("layout"), QStringLiteral("auto")).toString();
+    const KeyboardWidget::LayoutMode layoutMode = layoutName == QLatin1String("compact") ? KeyboardWidget::LayoutMode::Compact
+        : layoutName == QLatin1String("full")                                          ? KeyboardWidget::LayoutMode::Full
+                                                                                       : KeyboardWidget::LayoutMode::Auto;
+    std::shared_ptr<Keymap> systemKeymap = Keymap::fromSystemConfig();
     const bool wantToggleButton = parser.isSet(QStringLiteral("toggle-button")) || settings.value(QStringLiteral("toggleButton"), false).toBool();
 
     // ---- layout preview: no compositor needed (QT_QPA_PLATFORM=offscreen works)
@@ -155,7 +181,8 @@ int main(int argc, char **argv)
         InjectorRouter none;
         KeyboardWidget preview(&none);
         preview.setFunctionRowVisible(fnRow);
-        preview.setKeymap(Keymap::fromSystemConfig());
+        preview.setLayoutMode(layoutMode);
+        preview.setKeymap(systemKeymap);
         preview.resize(QSize(size.width(), qRound(size.height() * (heightFraction > 0 ? heightFraction : 0.42))));
         const bool ok = preview.grab().save(file);
         qInfo().noquote() << (ok ? "vkbd: wrote" : "vkbd: failed to write") << file << preview.size();
@@ -216,9 +243,15 @@ int main(int argc, char **argv)
     const bool wayland = app.platformName().startsWith(QLatin1String("wayland"));
 
     // ---- key injection backends --------------------------------------------
+    // uinput is preferred: its events take the same path as a physical
+    // keyboard, so modifiers, key repeat and global shortcuts behave exactly.
     std::unique_ptr<UinputInjector> uinput;
     if (backend != QLatin1String("im")) {
-        uinput = std::make_unique<UinputInjector>(); // device is created on first use
+        uinput = std::make_unique<UinputInjector>();
+        if (!uinput->open()) {
+            qInfo().noquote() << "vkbd: uinput backend unavailable:" << uinput->error()
+                              << "(install data/60-vkbd-uinput.rules and add yourself to the 'input' group, then log in again)";
+        }
     }
 
 #ifdef VKBD_HAVE_WAYLAND
@@ -228,7 +261,7 @@ int main(int argc, char **argv)
         im = std::make_unique<InputMethod>();
         im->initialize();
         if (im->isActive()) {
-            imInjector = std::make_unique<InputMethodInjector>(im.get());
+            imInjector = std::make_unique<InputMethodInjector>(im.get(), systemKeymap);
             qInfo() << "vkbd: bound zwp_input_method_v1, running as KWin's input method";
         } else {
             if (launchedByKwin) {
@@ -240,14 +273,14 @@ int main(int argc, char **argv)
 #endif
 
     InjectorRouter router;
+    if (uinput && uinput->isOpen()) {
+        router.addBackend(uinput.get());
+    }
 #ifdef VKBD_HAVE_WAYLAND
     if (imInjector) {
         router.addBackend(imInjector.get());
     }
 #endif
-    if (uinput) {
-        router.addBackend(uinput.get());
-    }
 
     if (parser.isSet(QStringLiteral("self-test"))) {
         qInfo().noquote() << "platform:" << app.platformName();
@@ -270,7 +303,30 @@ int main(int argc, char **argv)
     KeyboardWidget keyboard(&router);
     keyboard.setWindowTitle(QStringLiteral("vkbd"));
     keyboard.setFunctionRowVisible(fnRow);
-    keyboard.setKeymap(Keymap::fromSystemConfig());
+    keyboard.setLayoutMode(layoutMode);
+    keyboard.setKeymap(systemKeymap);
+
+    // Follow Plasma's active keyboard layout (group) for labels and modifiers.
+    LayoutWatcher layoutWatcher;
+    layoutWatcher.onChange = [&](int group) {
+        keyboard.setLayoutGroup(group);
+#ifdef VKBD_HAVE_WAYLAND
+        if (imInjector) {
+            imInjector->setLayoutGroup(group);
+        }
+#endif
+    };
+    {
+        QDBusInterface layouts(QStringLiteral("org.kde.keyboard"), QStringLiteral("/Layouts"), QStringLiteral("org.kde.KeyboardLayouts"), bus);
+        if (layouts.isValid()) {
+            QDBusReply<uint> current = layouts.call(QStringLiteral("getLayout"));
+            if (current.isValid()) {
+                layoutWatcher.layoutChanged(current.value());
+            }
+            bus.connect(QStringLiteral("org.kde.keyboard"), QStringLiteral("/Layouts"), QStringLiteral("org.kde.KeyboardLayouts"),
+                        QStringLiteral("layoutChanged"), &layoutWatcher, SLOT(layoutChanged(uint)));
+        }
+    }
 
     Qt::WindowFlags flags = Qt::Window | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus;
     if (!wayland) {
@@ -368,13 +424,6 @@ int main(int argc, char **argv)
 #ifdef VKBD_HAVE_WAYLAND
     if (im) {
         QObject::connect(im.get(), &InputMethod::activated, &controller, [&] {
-            InputMethodContext *ctx = im->context();
-            QObject::connect(ctx, &InputMethodContext::keymapChanged, &keyboard, [&] {
-                if (im->context() && im->context()->keymap()) {
-                    keyboard.setKeymap(im->context()->keymap());
-                }
-            });
-            QObject::connect(ctx, &InputMethodContext::groupChanged, &keyboard, &KeyboardWidget::setLayoutGroup);
             qInfo() << "vkbd: input method context activated";
             controller.imActivated();
         });
@@ -429,9 +478,12 @@ int main(int argc, char **argv)
 
     qInfo().noquote() << "vkbd: ready, shell ="
                       << (mode == Controller::Mode::InputPanel ? "input-panel" : mode == Controller::Mode::LayerShell ? "layer-shell" : "plain")
-                      << ", backends =" << (haveIm ? "wayland-im" : "") << (uinput ? "uinput(lazy)" : "");
+                      << ", backends =" << (uinput && uinput->isOpen() ? "uinput" : "") << (haveIm ? "wayland-im" : "")
+                      << ", layout =" << layoutName;
 
     const int rc = app.exec();
     qInfo() << "vkbd: exiting with" << rc;
     return rc;
 }
+
+#include "main.moc"

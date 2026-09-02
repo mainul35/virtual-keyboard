@@ -19,7 +19,9 @@ enum class KeyAction {
     Hide,
     PageFn,
     PageMain,
-    Screenshot, // capture the screen to the clipboard (hides the panel first)
+    PageSymbols,  // "?123"
+    PageSymbols2, // "=\<"
+    Screenshot,   // capture the screen to the clipboard (hides the panel first)
 };
 
 struct KeyDef {
@@ -29,11 +31,15 @@ struct KeyDef {
     float width = 1.0f;
     KeyKind kind = KeyKind::Char;
     KeyAction action = KeyAction::None;
+    bool withShift = false;  // symbol that lives on the shifted level of `code`
+    bool keymapLabel = true; // derive the label from the active xkb keymap
 };
 
 struct RowDef {
     std::vector<KeyDef> keys;
     float height = 1.0f;
+    float leftPad = 0.0f;  // empty space (units) before the first key
+    float rightPad = 0.0f; // empty space (units) after the last key
 };
 
 struct PageDef {
@@ -42,8 +48,16 @@ struct PageDef {
 };
 
 namespace Layout {
-PageDef mainPage(bool withFunctionRow);
+// Full PC layout (15 keys per row): comfortable in landscape.
+PageDef fullPage(bool withFunctionRow);
+// Phone-style layout (10 keys per row) for portrait: letters here, symbols
+// behind "?123" like Android/iOS, plus a utility row with Esc/Tab/Ctrl/Alt/arrows.
+PageDef compactPage();
+PageDef symbolsPage();
+PageDef symbols2Page();
+// Function keys, navigation cluster, media keys.
 PageDef fnPage();
+
 bool isModifierCode(int code);
 bool isLetterCode(int code);
 }

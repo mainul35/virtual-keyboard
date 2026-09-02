@@ -12,7 +12,10 @@ you everything the stock Maliit keyboard leaves out:
 * **PrtSc** takes a full-screen screenshot with Spectacle and puts it on the
   clipboard, hiding the keyboard for the capture and bringing it back so you can
   Ctrl+V straight away (falls back to the real Print key if Spectacle is missing)
-* Caps Lock, Tab, a full US-PC layout; key labels follow your real xkb layout
+* Two layouts: a phone-style compact one for portrait (10 keys per row, a
+  `?123` symbols page like Android/iOS, a utility row with Esc/Tab/Ctrl/Alt/
+  arrows/Del, and a wide centred space bar) and the full PC layout for
+  landscape. Key labels follow your real xkb layout.
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
   focus leaves, and it never steals focus from the app you are typing into
 
@@ -25,8 +28,8 @@ libraries with the rest of Plasma.
 | Piece | What it does |
 | --- | --- |
 | **KWin integration** | When selected as Plasma's virtual keyboard, KWin starts `vkbd` on a private Wayland socket and speaks `zwp_input_method_v1` to it: activate/deactivate on focus changes, and key/modifier requests to type. `vkbd` also asks for the input-panel surface role (`zwp_input_panel_v1`) so KWin docks it at the bottom, shows/hides it and pushes the focused window up like it does for Maliit. |
-| **Key injection, IM path** | Keys are sent as raw evdev keycodes over the input-method context (`key` + `modifiers` requests). They reach the focused app as ordinary `wl_keyboard` events with the right modifier state, which is why Ctrl/Alt combos and F-keys work in Qt, GTK, Electron and Xwayland apps alike. |
-| **Key injection, uinput path** | If there is no input-method context (X11 session, keyboard launched by hand, or an app that does not implement text-input so KWin never activates the IM) `vkbd` types through a virtual `/dev/uinput` keyboard instead. Both paths are compiled in; the right one is chosen per keystroke. |
+| **Key injection, uinput path (preferred)** | Keys are typed through a virtual `/dev/uinput` keyboard. They take exactly the path of a physical keyboard through libinput and KWin, so modifiers, key repeat, global shortcuts (Alt+Tab, Meta) and Xwayland apps all behave. Needs the udev rule from `install.sh`. |
+| **Key injection, IM path (fallback)** | Without `/dev/uinput` access, keys are sent as raw evdev keycodes over the input-method context (`key` + `modifiers` requests) and reach the focused app as `wl_keyboard` events. This only works while KWin has activated the keyboard for a text field. |
 | **Standalone window** | Without KWin's input-method socket the panel is a `layer-shell` surface (Wayland) or a focus-less tool window (X11), plus a small floating button to show/hide it. `vkbd --toggle` does the same from a panel launcher or shortcut. |
 
 ## Building
@@ -85,7 +88,7 @@ so the udev rule and `input` group membership are required in this mode.
 
 ```
 vkbd [--show|--hide|--toggle|--quit] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
-     [--height 0.42] [--no-fn-row] [--toggle-button]
+     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button]
 vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release
 vkbd --render preview.png:1280x800     # draw the layout to a PNG (QT_QPA_PLATFORM=offscreen works)
@@ -96,7 +99,8 @@ The same keys can be set permanently in `~/.config/vkbd/vkbd.conf`:
 ```ini
 [General]
 height=0.42        ; fraction of the screen height (default 0.42 landscape, 0.36 portrait)
-fnRow=true         ; Esc/F1–F12/Del row on the main page
+layout=auto        ; compact (portrait style), full (PC style) or auto by orientation
+fnRow=true         ; Esc/F1–F12/Del row of the full layout
 toggleButton=false ; always show the floating show/hide button
 backend=auto
 shell=auto
@@ -104,8 +108,11 @@ shell=auto
 
 ## Using the modifiers
 
-* **Tap** Shift/Ctrl/Alt/Meta: latched for the next key (outlined).
-* **Tap twice**: locked until tapped again (filled).
+* **Tap** Shift/Ctrl/Alt/Meta: latched for the next key (outlined). The
+  modifier is only pressed around that key, so touching the page in between
+  is not a Ctrl+click.
+* **Tap twice**: locked until tapped again (filled); again only applied to
+  keys you type, not to touches.
 * **Hold** with one finger and tap keys with another: behaves like a physical key.
 * Held keys auto-repeat (arrows, Backspace) because the app receives a real key
   press and release.

@@ -17,7 +17,10 @@
 KeyboardWidget::KeyboardWidget(Injector *injector, QWidget *parent)
     : QWidget(parent)
     , m_injector(injector)
-    , m_mainPage(Layout::mainPage(true))
+    , m_fullPage(Layout::fullPage(true))
+    , m_compactPage(Layout::compactPage())
+    , m_symbolsPage(Layout::symbolsPage())
+    , m_symbols2Page(Layout::symbols2Page())
     , m_fnPage(Layout::fnPage())
 {
     setAttribute(Qt::WA_AcceptTouchEvents);
@@ -53,7 +56,56 @@ void KeyboardWidget::setFunctionRowVisible(bool visible)
         return;
     }
     m_fnRow = visible;
-    m_mainPage = Layout::mainPage(visible);
+    m_fullPage = Layout::fullPage(visible);
+    rebuildSlots();
+    update();
+}
+
+void KeyboardWidget::setLayoutMode(LayoutMode mode)
+{
+    if (m_layoutMode == mode) {
+        return;
+    }
+    m_layoutMode = mode;
+    rebuildSlots();
+    update();
+}
+
+// ---------------------------------------------------------------- pages --
+
+bool KeyboardWidget::compactActive() const
+{
+    switch (m_layoutMode) {
+    case LayoutMode::Compact:
+        return true;
+    case LayoutMode::Full:
+        return false;
+    case LayoutMode::Auto:
+        break;
+    }
+    // The panel is a fixed fraction of the screen, so its aspect ratio tells
+    // us the orientation: landscape panels are far wider than tall.
+    return width() > 0 && height() > 0 && width() < height() * 2.2;
+}
+
+const PageDef &KeyboardWidget::currentPage() const
+{
+    switch (m_page) {
+    case Page::Fn:
+        return m_fnPage;
+    case Page::Symbols:
+        return m_symbolsPage;
+    case Page::Symbols2:
+        return m_symbols2Page;
+    case Page::Main:
+        break;
+    }
+    return m_compactNow ? m_compactPage : m_fullPage;
+}
+
+void KeyboardWidget::switchPage(Page page)
+{
+    m_page = page;
     rebuildSlots();
     update();
 }
@@ -63,20 +115,30 @@ void KeyboardWidget::setFunctionRowVisible(bool visible)
 void KeyboardWidget::rebuildSlots()
 {
     // Let go of any plain key that is still down, but keep modifier state so a
-    // latched Ctrl survives switching to the Fn page (Ctrl+Home etc.).
+    // latched Ctrl survives switching pages (Ctrl+Home etc.).
     for (size_t i = 0; i < m_slots.size(); ++i) {
         if (m_pressed[i]) {
             const KeyDef &def = *m_slots[i].def;
             if (def.kind == KeyKind::Char || def.kind == KeyKind::Special || def.kind == KeyKind::Lock) {
                 inject(def.code, false);
             }
+            if (m_tempShiftSlots.contains(static_cast<int>(i))) {
+                inject(KEY_LEFTSHIFT, false);
+            }
         }
     }
+    m_tempShiftSlots.clear();
     m_slots.clear();
     m_touchToSlot.clear();
     m_mouseSlot = -1;
 
-    const PageDef &page = m_onFnPage ? m_fnPage : m_mainPage;
+    m_compactNow = compactActive();
+    // The symbol pages only exist in the compact layout.
+    if (!m_compactNow && (m_page == Page::Symbols || m_page == Page::Symbols2)) {
+        m_page = Page::Main;
+    }
+
+    const PageDef &page = currentPage();
     for (const RowDef &row : page.rows) {
         for (const KeyDef &key : row.keys) {
             m_slots.push_back(KeySlot{&key, QRectF()});
@@ -88,7 +150,7 @@ void KeyboardWidget::rebuildSlots()
 
 void KeyboardWidget::relayout()
 {
-    const PageDef &page = m_onFnPage ? m_fnPage : m_mainPage;
+    const PageDef &page = currentPage();
     const float totalH = page.totalHeight();
     if (totalH <= 0 || width() <= 0 || height() <= 0) {
         return;
@@ -98,13 +160,13 @@ void KeyboardWidget::relayout()
     size_t idx = 0;
     qreal y = 0;
     for (const RowDef &row : page.rows) {
-        float units = 0;
+        float units = row.leftPad + row.rightPad;
         for (const KeyDef &k : row.keys) {
             units += k.width;
         }
         const qreal unitW = width() / static_cast<qreal>(units);
         const qreal rowH = unitH * row.height;
-        qreal x = 0;
+        qreal x = unitW * row.leftPad;
         for (const KeyDef &k : row.keys) {
             const qreal w = unitW * k.width;
             m_slots[idx++].rect = QRectF(x, y, w, rowH);
@@ -117,7 +179,11 @@ void KeyboardWidget::relayout()
 void KeyboardWidget::resizeEvent(QResizeEvent *e)
 {
     QWidget::resizeEvent(e);
-    relayout();
+    if (m_layoutMode == LayoutMode::Auto && compactActive() != m_compactNow) {
+        rebuildSlots(); // orientation changed
+    } else {
+        relayout();
+    }
 }
 
 void KeyboardWidget::changeEvent(QEvent *e)
@@ -231,8 +297,9 @@ void KeyboardWidget::pressModifier(int code)
     ModInfo &info = m_mods[code];
     info.before = info.state;
     info.used = false;
-    if (info.state == ModState::Idle) {
-        inject(code, true);
+    if (!info.down) {
+        inject(code, true); // finger down = physically held
+        info.down = true;
     }
     info.state = ModState::Held;
     updateSlotsWithCode(code);
@@ -244,14 +311,15 @@ void KeyboardWidget::pressModifier(int code)
 void KeyboardWidget::releaseModifier(int code)
 {
     ModInfo &info = m_mods[code];
+    // The physical press always ends with the finger; sticky states are
+    // re-applied around the next key press by engageStickyModifiers().
+    if (info.down) {
+        inject(code, false);
+        info.down = false;
+    }
     if (info.used) {
         // Held while another key was typed: behaves like a physical key.
-        if (info.before == ModState::Locked) {
-            info.state = ModState::Locked;
-        } else {
-            inject(code, false);
-            info.state = ModState::Idle;
-        }
+        info.state = info.before == ModState::Locked ? ModState::Locked : ModState::Idle;
     } else {
         switch (info.before) {
         case ModState::Idle:
@@ -262,7 +330,6 @@ void KeyboardWidget::releaseModifier(int code)
             break;
         case ModState::Locked:
         case ModState::Held:
-            inject(code, false);
             info.state = ModState::Idle;
             break;
         }
@@ -274,16 +341,34 @@ void KeyboardWidget::releaseModifier(int code)
     }
 }
 
-void KeyboardWidget::releaseLatchedModifiers()
+void KeyboardWidget::engageStickyModifiers()
+{
+    for (auto &[code, info] : m_mods) {
+        if ((info.state == ModState::Latched || info.state == ModState::Locked) && !info.down) {
+            inject(code, true);
+            info.down = true;
+        }
+        if (info.state == ModState::Held || info.state == ModState::Latched) {
+            info.used = true;
+        }
+    }
+}
+
+void KeyboardWidget::releaseStickyModifiers()
 {
     bool shiftChanged = false;
     for (auto &[code, info] : m_mods) {
-        if (info.state == ModState::Latched) {
-            inject(code, false);
-            info.state = ModState::Idle;
-            updateSlotsWithCode(code);
-            if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT) {
-                shiftChanged = true;
+        if (info.state == ModState::Latched || info.state == ModState::Locked) {
+            if (info.down) {
+                inject(code, false);
+                info.down = false;
+            }
+            if (info.state == ModState::Latched) {
+                info.state = ModState::Idle;
+                updateSlotsWithCode(code);
+                if (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT) {
+                    shiftChanged = true;
+                }
             }
         }
     }
@@ -310,12 +395,13 @@ void KeyboardWidget::pressSlot(int idx)
     case KeyKind::Lock:
     case KeyKind::Char:
     case KeyKind::Special:
-        inject(def.code, true);
-        for (auto &[code, info] : m_mods) {
-            if (info.state == ModState::Held || info.state == ModState::Latched) {
-                info.used = true;
-            }
+        engageStickyModifiers();
+        if (def.withShift && !shiftActive()) {
+            // Symbol on the shifted level: hold Shift just for this key.
+            inject(KEY_LEFTSHIFT, true);
+            m_tempShiftSlots.insert(idx);
         }
+        inject(def.code, true);
         break;
     }
 }
@@ -334,17 +420,17 @@ void KeyboardWidget::releaseSlot(int idx)
         releaseModifier(def.code);
         break;
     case KeyKind::Lock:
-        inject(def.code, false);
-        if (def.code == KEY_CAPSLOCK) {
-            m_capsLock = !m_capsLock;
-            updateAllCharKeys();
-        }
-        releaseLatchedModifiers();
-        break;
     case KeyKind::Char:
     case KeyKind::Special:
         inject(def.code, false);
-        releaseLatchedModifiers();
+        if (m_tempShiftSlots.remove(idx)) {
+            inject(KEY_LEFTSHIFT, false);
+        }
+        if (def.kind == KeyKind::Lock && def.code == KEY_CAPSLOCK) {
+            m_capsLock = !m_capsLock;
+            updateAllCharKeys();
+        }
+        releaseStickyModifiers();
         break;
     case KeyKind::Action:
         switch (def.action) {
@@ -353,17 +439,19 @@ void KeyboardWidget::releaseSlot(int idx)
             Q_EMIT hideRequested();
             break;
         case KeyAction::PageFn:
-            m_onFnPage = true;
-            rebuildSlots();
-            update();
+            switchPage(Page::Fn);
             break;
         case KeyAction::PageMain:
-            m_onFnPage = false;
-            rebuildSlots();
-            update();
+            switchPage(Page::Main);
+            break;
+        case KeyAction::PageSymbols:
+            switchPage(Page::Symbols);
+            break;
+        case KeyAction::PageSymbols2:
+            switchPage(Page::Symbols2);
             break;
         case KeyAction::Screenshot:
-            releaseLatchedModifiers();
+            releaseStickyModifiers();
             Q_EMIT screenshotRequested();
             break;
         case KeyAction::None:
@@ -375,8 +463,10 @@ void KeyboardWidget::releaseSlot(int idx)
 
 void KeyboardWidget::tapKey(int code)
 {
+    engageStickyModifiers();
     inject(code, true);
     inject(code, false);
+    releaseStickyModifiers();
 }
 
 void KeyboardWidget::releaseAll()
@@ -390,8 +480,13 @@ void KeyboardWidget::releaseAll()
             }
         }
     }
+    for (int idx : std::as_const(m_tempShiftSlots)) {
+        Q_UNUSED(idx);
+        inject(KEY_LEFTSHIFT, false);
+    }
+    m_tempShiftSlots.clear();
     for (auto &[code, info] : m_mods) {
-        if (info.state != ModState::Idle) {
+        if (info.down) {
             inject(code, false);
         }
         info = ModInfo{};
@@ -405,7 +500,7 @@ void KeyboardWidget::releaseAll()
 
 QString KeyboardWidget::labelFor(const KeyDef &def, bool shifted) const
 {
-    if (def.kind == KeyKind::Char && m_keymap) {
+    if (def.kind == KeyKind::Char && def.keymapLabel && m_keymap) {
         const QString s = m_keymap->label(def.code, m_group, shifted);
         if (!s.isEmpty()) {
             return s;
@@ -518,7 +613,7 @@ void KeyboardWidget::paintKey(QPainter &p, int idx)
     p.drawText(r, Qt::AlignCenter, label);
 
     // Small hint of the other shift level in the top-right corner.
-    if (def.kind == KeyKind::Char && !Layout::isLetterCode(def.code)) {
+    if (def.kind == KeyKind::Char && def.keymapLabel && !Layout::isLetterCode(def.code)) {
         const QString other = labelFor(def, !shifted);
         if (!other.isEmpty() && other != label) {
             QFont sf = f;
