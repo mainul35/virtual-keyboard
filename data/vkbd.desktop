@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=vkbd Virtual Keyboard
+Comment=Lightweight on-screen keyboard with arrow, Ctrl, Alt, Del, Esc and function keys
+Exec=vkbd
+Icon=input-keyboard-virtual
+X-KDE-Wayland-VirtualKeyboard=true
+NoDisplay=true

@@ -1,0 +1,4 @@
+# Let members of the "input" group create virtual keyboards through /dev/uinput.
+# Used by vkbd when it is not running as KWin's input method (X11, other
+# compositors, or apps that do not support the Wayland text-input protocol).
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
