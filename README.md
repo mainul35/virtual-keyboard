@@ -69,10 +69,14 @@ rule, adds you to the `input` group and registers vkbd with KWin.
    kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/vkbd.desktop
    qdbus6 org.kde.KWin /KWin reconfigure
    ```
-3. Tap any text field. The keyboard appears; the ⌄ key hides it, tapping a field
-   brings it back. For apps that do not support text-input (some Electron builds,
-   X11 apps) use the Plasma system-tray keyboard icon, `vkbd --toggle`, or pin the
-   *Toggle vkbd Keyboard* launcher to your panel.
+3. Tap any text field. The keyboard appears; the hide key puts it away, tapping
+   a field brings it back.
+4. vkbd adds its own keyboard icon to the system tray. Click it to bring the
+   keyboard up anywhere, also on the desktop or in apps without text-input
+   support (needed e.g. to take a screenshot with PrtSc on a touch-only
+   device); the right-click menu has Show, Hide, "Take screenshot to clipboard"
+   and Quit. `vkbd --toggle` and the *Toggle vkbd Keyboard* launcher do the
+   same. `--no-tray` or `tray=false` in the config file removes the icon.
 
 The Plasma tray icon's "enable/disable virtual keyboard" toggle and KWin's
 `org.kde.kwin.VirtualKeyboard` D-Bus interface keep working, because to KWin
@@ -88,7 +92,7 @@ so the udev rule and `input` group membership are required in this mode.
 
 ```
 vkbd [--show|--hide|--toggle|--quit] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
-     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button]
+     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray]
 vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release
 vkbd --render preview.png:1280x800     # draw the layout to a PNG (QT_QPA_PLATFORM=offscreen works)
@@ -102,6 +106,7 @@ height=0.42        ; fraction of the screen height (default 0.42 landscape, 0.36
 layout=auto        ; compact (portrait style), full (PC style) or auto by orientation
 fnRow=true         ; Esc/F1–F12/Del row of the full layout
 toggleButton=false ; always show the floating show/hide button
+tray=true          ; keyboard icon in the system tray (click = show/hide)
 backend=auto
 shell=auto
 ```

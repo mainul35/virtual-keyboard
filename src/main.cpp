@@ -17,7 +17,10 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QMenu>
+#include <QPainter>
 #include <QScreen>
+#include <QSystemTrayIcon>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QWindow>
@@ -139,6 +142,7 @@ int main(int argc, char **argv)
         {QStringLiteral("layout"), QStringLiteral("Key layout: auto (compact in portrait, full in landscape), compact, full."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("no-fn-row"), QStringLiteral("Hide the Esc/F1-F12/Del row of the full layout.")},
         {QStringLiteral("toggle-button"), QStringLiteral("Always show the floating show/hide button.")},
+        {QStringLiteral("no-tray"), QStringLiteral("Do not add an icon to the system tray.")},
         {QStringLiteral("self-test"), QStringLiteral("Report which input backends work, press/release Shift once, and exit.")},
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
     });
@@ -167,6 +171,7 @@ int main(int argc, char **argv)
                                                                                        : KeyboardWidget::LayoutMode::Auto;
     std::shared_ptr<Keymap> systemKeymap = Keymap::fromSystemConfig();
     const bool wantToggleButton = parser.isSet(QStringLiteral("toggle-button")) || settings.value(QStringLiteral("toggleButton"), false).toBool();
+    const bool wantTray = !parser.isSet(QStringLiteral("no-tray")) && settings.value(QStringLiteral("tray"), true).toBool();
 
     // ---- layout preview: no compositor needed (QT_QPA_PLATFORM=offscreen works)
     if (parser.isSet(QStringLiteral("render"))) {
@@ -441,6 +446,41 @@ int main(int argc, char **argv)
         });
     }
 #endif
+
+    // ---- system tray icon: bring the keyboard up even on the desktop --------
+    std::unique_ptr<QSystemTrayIcon> tray;
+    std::unique_ptr<QMenu> trayMenu;
+    if (wantTray && QSystemTrayIcon::isSystemTrayAvailable()) {
+        QIcon icon = QIcon::fromTheme(QStringLiteral("input-keyboard-virtual"), QIcon::fromTheme(QStringLiteral("input-keyboard")));
+        if (icon.isNull()) {
+            QPixmap pm(64, 64);
+            pm.fill(Qt::transparent);
+            QPainter p(&pm);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setPen(QPen(Qt::white, 4));
+            p.drawRoundedRect(QRectF(6, 16, 52, 32), 6, 6);
+            for (int i = 0; i < 4; ++i) {
+                p.drawPoint(QPointF(16 + i * 11, 27));
+                p.drawPoint(QPointF(16 + i * 11, 37));
+            }
+            icon = QIcon(pm);
+        }
+        tray = std::make_unique<QSystemTrayIcon>(icon);
+        tray->setToolTip(QStringLiteral("vkbd on-screen keyboard: click to show or hide"));
+        trayMenu = std::make_unique<QMenu>();
+        trayMenu->addAction(QStringLiteral("Show keyboard"), &controller, &Controller::show);
+        trayMenu->addAction(QStringLiteral("Hide keyboard"), &controller, &Controller::hide);
+        trayMenu->addAction(QStringLiteral("Take screenshot to clipboard"), &controller, &Controller::screenshot);
+        trayMenu->addSeparator();
+        trayMenu->addAction(QStringLiteral("Quit vkbd"), &controller, &Controller::quit);
+        tray->setContextMenu(trayMenu.get());
+        QObject::connect(tray.get(), &QSystemTrayIcon::activated, &controller, [&](QSystemTrayIcon::ActivationReason reason) {
+            if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::MiddleClick) {
+                controller.toggle();
+            }
+        });
+        tray->show();
+    }
 
     std::unique_ptr<ToggleButton> toggleButton;
     if (wantToggleButton || !haveIm) {

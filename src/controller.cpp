@@ -141,7 +141,16 @@ void Controller::show()
     m_hideTimer.stop();
     showPanel();
     if (m_mode == Mode::InputPanel) {
+        // forceActivate makes KWin activate us even if the focused window has
+        // no text field (desktop, file manager). The first call triggers the
+        // activation while our surface may still be unmapped; a second one
+        // once it is mapped makes KWin actually show the panel.
         kwinForceActivate();
+        QTimer::singleShot(300, this, [this] {
+            if (!m_hideTimer.isActive()) {
+                kwinForceActivate();
+            }
+        });
     }
 }
 
