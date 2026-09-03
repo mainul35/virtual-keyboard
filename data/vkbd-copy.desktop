@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Copy (vkbd)
+Comment=Send Ctrl+C to the focused window through the vkbd on-screen keyboard
+Exec=vkbd --copy
+Icon=edit-copy
+Categories=Utility;Accessibility;
+Terminal=false

@@ -20,6 +20,8 @@ const auto kKwinIface = QStringLiteral("org.kde.kwin.VirtualKeyboard");
 // Give the compositor a frame or two to actually unmap the panel before capturing.
 constexpr int kScreenshotHideDelayMs = 350;
 constexpr int kScreenshotTimeoutMs = 8000;
+// Time for a tray menu to close and keyboard focus to return to the app.
+constexpr int kChordDelayMs = 400;
 }
 
 Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
@@ -80,6 +82,28 @@ void Controller::screenshot()
         m_screenshotTimeout.start();
         proc->start();
     });
+}
+
+void Controller::sendChordSoon(int modifierCode, int code)
+{
+    QTimer::singleShot(kChordDelayMs, this, [this, modifierCode, code] {
+        m_keyboard->tapChord(modifierCode, code);
+    });
+}
+
+void Controller::copy()
+{
+    sendChordSoon(KEY_LEFTCTRL, KEY_C);
+}
+
+void Controller::paste()
+{
+    sendChordSoon(KEY_LEFTCTRL, KEY_V);
+}
+
+void Controller::selectAll()
+{
+    sendChordSoon(KEY_LEFTCTRL, KEY_A);
 }
 
 void Controller::finishScreenshot()

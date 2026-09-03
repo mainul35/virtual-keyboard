@@ -469,6 +469,19 @@ void KeyboardWidget::tapKey(int code)
     releaseStickyModifiers();
 }
 
+void KeyboardWidget::tapChord(int modifierCode, int code)
+{
+    const bool modAlreadyDown = m_mods.count(modifierCode) && m_mods[modifierCode].down;
+    if (!modAlreadyDown) {
+        inject(modifierCode, true);
+    }
+    inject(code, true);
+    inject(code, false);
+    if (!modAlreadyDown) {
+        inject(modifierCode, false);
+    }
+}
+
 void KeyboardWidget::releaseAll()
 {
     for (size_t i = 0; i < m_slots.size(); ++i) {

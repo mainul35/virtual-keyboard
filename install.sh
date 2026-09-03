@@ -83,8 +83,10 @@ sudo cmake --install build
 # KWin only looks in the XDG applications dirs and runs Exec with its own PATH,
 # so install the entries under /usr/share with an absolute Exec path.
 sed "s|^Exec=vkbd|Exec=$PREFIX/bin/vkbd|" data/vkbd.desktop | sudo tee /usr/share/applications/vkbd.desktop >/dev/null
-sed "s|^Exec=vkbd|Exec=$PREFIX/bin/vkbd|" data/vkbd-toggle.desktop | sudo tee /usr/share/applications/vkbd-toggle.desktop >/dev/null
-sudo chmod 644 /usr/share/applications/vkbd.desktop /usr/share/applications/vkbd-toggle.desktop
+for entry in vkbd-toggle vkbd-copy vkbd-paste; do
+    sed "s|^Exec=vkbd|Exec=$PREFIX/bin/vkbd|" "data/$entry.desktop" | sudo tee "/usr/share/applications/$entry.desktop" >/dev/null
+done
+sudo chmod 644 /usr/share/applications/vkbd.desktop /usr/share/applications/vkbd-*.desktop
 
 echo "==> uinput access (fallback backend for X11 / apps without text-input support)"
 sudo install -Dm644 data/60-vkbd-uinput.rules /etc/udev/rules.d/60-vkbd-uinput.rules

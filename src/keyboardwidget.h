@@ -39,6 +39,9 @@ public:
 
     // Press and release a keycode through the injector (used for fallbacks).
     void tapKey(int code);
+    // Modifier + key chord, independent of the on-screen modifier state
+    // (used for the tray's Copy/Paste actions).
+    void tapChord(int modifierCode, int code);
 
 Q_SIGNALS:
     void hideRequested();

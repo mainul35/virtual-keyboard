@@ -38,6 +38,12 @@ public Q_SLOTS:
     // Hide the panel, capture the screen to the clipboard with Spectacle,
     // then bring the panel back so Ctrl+V works right away.
     Q_SCRIPTABLE void screenshot();
+    // Send Ctrl+C / Ctrl+V / Ctrl+A to the focused window without showing the
+    // keyboard (for the tray menu, launchers and shortcuts). A short delay lets
+    // the menu close and focus return to the application first.
+    Q_SCRIPTABLE void copy();
+    Q_SCRIPTABLE void paste();
+    Q_SCRIPTABLE void selectAll();
 
     void imActivated();
     void imDeactivated();
@@ -48,6 +54,7 @@ private:
     void kwinDeactivate();
     void finishScreenshot();
     void showPanel();
+    void sendChordSoon(int modifierCode, int code);
 
     KeyboardWidget *m_keyboard;
     Mode m_mode;

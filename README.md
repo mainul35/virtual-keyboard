@@ -73,10 +73,14 @@ rule, adds you to the `input` group and registers vkbd with KWin.
    a field brings it back.
 4. vkbd adds its own keyboard icon to the system tray. Click it to bring the
    keyboard up anywhere, also on the desktop or in apps without text-input
-   support (needed e.g. to take a screenshot with PrtSc on a touch-only
-   device); the right-click menu has Show, Hide, "Take screenshot to clipboard"
-   and Quit. `vkbd --toggle` and the *Toggle vkbd Keyboard* launcher do the
-   same. `--no-tray` or `tray=false` in the config file removes the icon.
+   support. Its menu (long-press or right-click) offers **Copy, Paste and
+   Select all**, which send the real Ctrl+C / Ctrl+V / Ctrl+A to the focused
+   window without opening the keyboard: select text in a PDF or web page, open
+   the menu, tap Copy. It also has Show, Hide, "Take screenshot to clipboard"
+   and Quit. `vkbd --copy`, `--paste`, `--toggle` and the *Toggle vkbd Keyboard*
+   launcher do the same from a panel launcher or a custom shortcut. `--no-tray`
+   or `tray=false` in the config file removes the icon; `toggleButton=true`
+   adds a floating one-tap keyboard bubble at the bottom-right instead.
 
 The Plasma tray icon's "enable/disable virtual keyboard" toggle and KWin's
 `org.kde.kwin.VirtualKeyboard` D-Bus interface keep working, because to KWin
@@ -91,7 +95,7 @@ so the udev rule and `input` group membership are required in this mode.
 ## Options
 
 ```
-vkbd [--show|--hide|--toggle|--quit] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
+vkbd [--show|--hide|--toggle|--quit|--copy|--paste] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
      [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray]
 vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release

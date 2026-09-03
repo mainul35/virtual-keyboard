@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Paste (vkbd)
+Comment=Send Ctrl+V to the focused window through the vkbd on-screen keyboard
+Exec=vkbd --paste
+Icon=edit-paste
+Categories=Utility;Accessibility;
+Terminal=false

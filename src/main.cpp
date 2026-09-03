@@ -135,6 +135,8 @@ int main(int argc, char **argv)
         {QStringLiteral("hide"), QStringLiteral("Hide the running keyboard.")},
         {QStringLiteral("toggle"), QStringLiteral("Toggle the running keyboard (starts it if needed).")},
         {QStringLiteral("quit"), QStringLiteral("Stop the running keyboard.")},
+        {QStringLiteral("copy"), QStringLiteral("Send Ctrl+C to the focused window (via the running keyboard).")},
+        {QStringLiteral("paste"), QStringLiteral("Send Ctrl+V to the focused window (via the running keyboard).")},
         {QStringLiteral("doctor"), QStringLiteral("Print diagnostics about the KWin integration and exit.")},
         {QStringLiteral("backend"), QStringLiteral("Key injection backend: auto, im (KWin input method), uinput."), QStringLiteral("name"), QStringLiteral("auto")},
         {QStringLiteral("shell"), QStringLiteral("Panel window role: auto, input-panel, layer-shell, plain."), QStringLiteral("name"), QStringLiteral("auto")},
@@ -202,15 +204,24 @@ int main(int argc, char **argv)
     const bool wantHide = parser.isSet(QStringLiteral("hide"));
     const bool wantToggle = parser.isSet(QStringLiteral("toggle"));
     const bool wantQuit = parser.isSet(QStringLiteral("quit"));
+    const bool wantCopy = parser.isSet(QStringLiteral("copy"));
+    const bool wantPaste = parser.isSet(QStringLiteral("paste"));
     QDBusConnection bus = QDBusConnection::sessionBus();
-    if (wantShow || wantHide || wantToggle || wantQuit) {
+    if (wantShow || wantHide || wantToggle || wantQuit || wantCopy || wantPaste) {
         QDBusInterface running(kService, QStringLiteral("/"), kInterface, bus);
         if (running.isValid()) {
-            running.call(wantQuit ? QStringLiteral("quit") : wantHide ? QStringLiteral("hide") : wantShow ? QStringLiteral("show") : QStringLiteral("toggle"));
+            const QString method = wantQuit ? QStringLiteral("quit")
+                : wantHide                  ? QStringLiteral("hide")
+                : wantCopy                  ? QStringLiteral("copy")
+                : wantPaste                 ? QStringLiteral("paste")
+                : wantShow                  ? QStringLiteral("show")
+                                            : QStringLiteral("toggle");
+            running.call(method);
             return 0;
         }
-        if (wantHide || wantQuit) {
-            return 0;
+        if (wantHide || wantQuit || wantCopy || wantPaste) {
+            qWarning() << "vkbd: not running";
+            return 1;
         }
         // Not running yet: fall through and start, then show.
     }
@@ -470,6 +481,10 @@ int main(int argc, char **argv)
         trayMenu = std::make_unique<QMenu>();
         trayMenu->addAction(QStringLiteral("Show keyboard"), &controller, &Controller::show);
         trayMenu->addAction(QStringLiteral("Hide keyboard"), &controller, &Controller::hide);
+        trayMenu->addSeparator();
+        trayMenu->addAction(QStringLiteral("Copy  (Ctrl+C)"), &controller, &Controller::copy);
+        trayMenu->addAction(QStringLiteral("Paste  (Ctrl+V)"), &controller, &Controller::paste);
+        trayMenu->addAction(QStringLiteral("Select all  (Ctrl+A)"), &controller, &Controller::selectAll);
         trayMenu->addAction(QStringLiteral("Take screenshot to clipboard"), &controller, &Controller::screenshot);
         trayMenu->addSeparator();
         trayMenu->addAction(QStringLiteral("Quit vkbd"), &controller, &Controller::quit);
@@ -489,7 +504,7 @@ int main(int argc, char **argv)
         toggleButton->setAttribute(Qt::WA_ShowWithoutActivating);
         QObject::connect(toggleButton.get(), &ToggleButton::clicked, &controller, &Controller::toggle);
 #ifdef VKBD_HAVE_LAYER_SHELL
-        if (wayland && mode == Controller::Mode::LayerShell) {
+        if (wayland) {
             toggleButton->winId();
             auto *lw = LayerShellQt::Window::get(toggleButton->windowHandle());
             lw->setScope(QStringLiteral("vkbd-toggle"));
