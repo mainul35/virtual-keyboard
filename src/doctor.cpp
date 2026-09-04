@@ -118,14 +118,16 @@ int runDoctor()
         QDBusReply<QString> status = me.call(QStringLiteral("status"));
         line(QStringLiteral("status"), status.isValid() ? status.value() : QStringLiteral("(older instance, no status)"));
         // Is its tray icon registered with Plasma's StatusNotifierWatcher?
-        QDBusReply<QString> owner = bus.interface()->serviceOwner(service);
+        // Qt registers the item on a connection of its own, so match by PID.
         QDBusInterface watcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QStringLiteral("/StatusNotifierWatcher"),
                                QStringLiteral("org.kde.StatusNotifierWatcher"), bus);
         if (watcher.isValid()) {
             const QStringList items = watcher.property("RegisteredStatusNotifierItems").toStringList();
             bool found = false;
             for (const QString &item : items) {
-                if (owner.isValid() && item.startsWith(owner.value())) {
+                const QString itemService = item.section(QLatin1Char('/'), 0, 0);
+                QDBusReply<uint> itemPid = bus.interface()->servicePid(itemService);
+                if (pid.isValid() && itemPid.isValid() && itemPid.value() == pid.value()) {
                     found = true;
                 }
             }
