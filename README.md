@@ -17,7 +17,10 @@ you everything the stock Maliit keyboard leaves out:
   arrows/Del, and a wide centred space bar) and the full PC layout for
   landscape. Key labels follow your real xkb layout.
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
-  focus leaves, and it never steals focus from the app you are typing into
+  focus leaves, and it never steals focus from the app you are typing into.
+  Popups and menus (including vkbd's own tray menu) do not make it disappear:
+  it only hides after a short grace period without a text field, or when you
+  hide it yourself
 
 It is deliberately small: a single custom-painted `QWidget`, no QML engine, no
 GPU effects, no animations. Idle CPU is zero and the process shares Qt's

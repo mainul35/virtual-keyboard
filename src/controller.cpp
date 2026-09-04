@@ -256,6 +256,13 @@ void Controller::holdOpen(bool hold)
     m_holdOpen = hold;
     if (hold) {
         m_hideTimer.stop();
+        // Safety net: a menu whose close notification never arrives must not
+        // pin the keyboard on screen forever.
+        QTimer::singleShot(30000, this, [this] {
+            if (m_holdOpen) {
+                holdOpen(false);
+            }
+        });
     } else if (!m_imActive && m_keyboard->isVisible()) {
         scheduleAutoHide();
     }
