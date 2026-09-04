@@ -22,6 +22,7 @@
 #include <QScreen>
 #include <QSystemTrayIcon>
 #include <QSettings>
+#include <QTimer>
 #include <QStandardPaths>
 #include <QWindow>
 
@@ -459,9 +460,19 @@ int main(int argc, char **argv)
 #endif
 
     // ---- system tray icon: bring the keyboard up even on the desktop --------
+    // KWin starts its input method before plasmashell is up, so the tray host
+    // (org.kde.StatusNotifierWatcher) is usually not there yet: create the icon
+    // when the host appears and re-create it whenever plasmashell restarts.
     std::unique_ptr<QSystemTrayIcon> tray;
     std::unique_ptr<QMenu> trayMenu;
-    if (wantTray && QSystemTrayIcon::isSystemTrayAvailable()) {
+    auto createTray = [&] {
+        if (!wantTray || tray) {
+            return;
+        }
+        if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+            qInfo() << "vkbd: no system tray host yet, will add the icon when one appears";
+            return;
+        }
         QIcon icon = QIcon::fromTheme(QStringLiteral("input-keyboard-virtual"), QIcon::fromTheme(QStringLiteral("input-keyboard")));
         if (icon.isNull()) {
             QPixmap pm(64, 64);
@@ -495,6 +506,33 @@ int main(int argc, char **argv)
             }
         });
         tray->show();
+        qInfo() << "vkbd: system tray icon added";
+    };
+    createTray();
+    QDBusServiceWatcher sniWatcher(QStringLiteral("org.kde.StatusNotifierWatcher"), bus,
+                                   QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration);
+    QObject::connect(&sniWatcher, &QDBusServiceWatcher::serviceRegistered, &app, [&](const QString &) {
+        // Give the freshly started host a moment to be ready for registrations.
+        QTimer::singleShot(1500, &app, [&] { createTray(); });
+    });
+    QObject::connect(&sniWatcher, &QDBusServiceWatcher::serviceUnregistered, &app, [&](const QString &) {
+        qInfo() << "vkbd: system tray host went away, dropping the icon";
+        tray.reset();
+        trayMenu.reset();
+    });
+    // Belt and braces: a few timed retries in case the host was registered
+    // before the watcher was set up but was not yet accepting items.
+    QTimer trayRetry;
+    trayRetry.setInterval(5000);
+    int trayRetriesLeft = 12;
+    QObject::connect(&trayRetry, &QTimer::timeout, &app, [&] {
+        createTray();
+        if (tray || --trayRetriesLeft <= 0) {
+            trayRetry.stop();
+        }
+    });
+    if (wantTray && !tray) {
+        trayRetry.start();
     }
 
     std::unique_ptr<ToggleButton> toggleButton;

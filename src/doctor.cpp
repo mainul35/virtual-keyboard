@@ -117,6 +117,26 @@ int runDoctor()
         QDBusInterface me(service, QStringLiteral("/"), service, bus);
         QDBusReply<QString> status = me.call(QStringLiteral("status"));
         line(QStringLiteral("status"), status.isValid() ? status.value() : QStringLiteral("(older instance, no status)"));
+        // Is its tray icon registered with Plasma's StatusNotifierWatcher?
+        QDBusReply<QString> owner = bus.interface()->serviceOwner(service);
+        QDBusInterface watcher(QStringLiteral("org.kde.StatusNotifierWatcher"), QStringLiteral("/StatusNotifierWatcher"),
+                               QStringLiteral("org.kde.StatusNotifierWatcher"), bus);
+        if (watcher.isValid()) {
+            const QStringList items = watcher.property("RegisteredStatusNotifierItems").toStringList();
+            bool found = false;
+            for (const QString &item : items) {
+                if (owner.isValid() && item.startsWith(owner.value())) {
+                    found = true;
+                }
+            }
+            line(QStringLiteral("tray icon registered"), yesNo(found));
+            if (!found) {
+                out() << "   -> vkbd has no icon in the system tray (started before plasmashell?). Newer builds add it when the tray appears.\n";
+                ++problems;
+            }
+        } else {
+            line(QStringLiteral("tray host"), QStringLiteral("org.kde.StatusNotifierWatcher not running"));
+        }
         if (status.isValid() && !status.value().contains(QLatin1String("launchedByKwin=yes"))) {
             out() << "   -> this instance was started by hand, not by KWin. Quit it (vkbd --quit) so KWin's own instance can run.\n";
             ++problems;
