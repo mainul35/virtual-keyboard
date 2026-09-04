@@ -27,6 +27,13 @@ public:
     // Called right after the panel window is shown (used to attach the
     // compositor slide animation once the surface exists).
     void setAfterShowHook(std::function<void()> hook) { m_afterShow = std::move(hook); }
+    // Identifier of Plasma's active toplevel window (empty = none / unknown).
+    // With it, losing the text field to a popup keeps the keyboard, while
+    // switching to another application hides it.
+    void setActiveWindowProvider(std::function<QString()> provider) { m_activeWindow = std::move(provider); }
+    void activeWindowChanged(const QString &id);
+    // While held (our own tray menu is open) the keyboard never auto-hides.
+    void holdOpen(bool hold);
 
 public Q_SLOTS:
     Q_SCRIPTABLE void show();
@@ -55,11 +62,17 @@ private:
     void finishScreenshot();
     void showPanel();
     void sendChordSoon(int modifierCode, int code);
+    void scheduleAutoHide();
+    void autoHideNow();
 
     KeyboardWidget *m_keyboard;
     Mode m_mode;
     QString m_statusInfo;
     std::function<void()> m_afterShow;
+    std::function<QString()> m_activeWindow;
+    QString m_activeWindowAtShow;
+    bool m_imActive = false;
+    bool m_holdOpen = false;
     QTimer m_hideTimer;
     QTimer m_screenshotTimeout;
     bool m_screenshotInProgress = false;

@@ -34,6 +34,7 @@
 
 #ifdef VKBD_HAVE_WAYLAND
 #include "wayland/inputmethod.h"
+#include "wayland/windowtracker.h"
 #endif
 #ifdef VKBD_HAVE_INPUT_PANEL
 #include "wayland/inputpanelshell.h"
@@ -447,6 +448,22 @@ int main(int argc, char **argv)
     QObject::connect(&keyboard, &KeyboardWidget::screenshotRequested, &controller, &Controller::screenshot);
 
 #ifdef VKBD_HAVE_WAYLAND
+    // Active-window tracking makes the auto-hide decision smarter.
+    std::unique_ptr<WindowTracker> windowTracker;
+    if (wayland) {
+        windowTracker = std::make_unique<WindowTracker>();
+        windowTracker->initialize();
+        if (windowTracker->isActive()) {
+            controller.setActiveWindowProvider([&] { return windowTracker->activeWindow(); });
+            QObject::connect(windowTracker.get(), &WindowTracker::activeWindowChanged, &controller, &Controller::activeWindowChanged);
+        } else {
+            qInfo() << "vkbd: org_kde_plasma_window_management not offered; auto-hide uses timing only";
+            windowTracker.reset();
+        }
+    }
+#endif
+
+#ifdef VKBD_HAVE_WAYLAND
     if (im) {
         QObject::connect(im.get(), &InputMethod::activated, &controller, [&] {
             qInfo() << "vkbd: input method context activated";
@@ -500,6 +517,11 @@ int main(int argc, char **argv)
         trayMenu->addSeparator();
         trayMenu->addAction(QStringLiteral("Quit vkbd"), &controller, &Controller::quit);
         tray->setContextMenu(trayMenu.get());
+        // Our own menu taking focus must not make the keyboard go away.
+        QObject::connect(trayMenu.get(), &QMenu::aboutToShow, &controller, [&] { controller.holdOpen(true); });
+        QObject::connect(trayMenu.get(), &QMenu::aboutToHide, &controller, [&] {
+            QTimer::singleShot(1500, &controller, [&] { controller.holdOpen(false); });
+        });
         QObject::connect(tray.get(), &QSystemTrayIcon::activated, &controller, [&](QSystemTrayIcon::ActivationReason reason) {
             if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::MiddleClick) {
                 controller.toggle();

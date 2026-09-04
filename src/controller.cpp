@@ -22,6 +22,12 @@ constexpr int kScreenshotHideDelayMs = 350;
 constexpr int kScreenshotTimeoutMs = 8000;
 // Time for a tray menu to close and keyboard focus to return to the app.
 constexpr int kChordDelayMs = 400;
+// Auto-hide grace periods after the text field lost focus: quick when another
+// application became active, generous when focus went to a popup/the desktop
+// (no active toplevel) or stayed in the same window, so menus opened from the
+// panel or our tray icon do not make the keyboard vanish.
+constexpr int kHideAfterAppSwitchMs = 250;
+constexpr int kHideAfterFocusLossMs = 2500;
 }
 
 Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
@@ -32,12 +38,7 @@ Controller::Controller(KeyboardWidget *keyboard, Mode mode, QObject *parent)
     // Focus hops between two text fields produce deactivate+activate back to
     // back; a short grace period avoids the panel flashing.
     m_hideTimer.setSingleShot(true);
-    m_hideTimer.setInterval(250);
-    connect(&m_hideTimer, &QTimer::timeout, this, [this] {
-        if (!m_screenshotInProgress) {
-            m_keyboard->hide();
-        }
-    });
+    connect(&m_hideTimer, &QTimer::timeout, this, &Controller::autoHideNow);
     m_screenshotTimeout.setSingleShot(true);
     m_screenshotTimeout.setInterval(kScreenshotTimeoutMs);
     connect(&m_screenshotTimeout, &QTimer::timeout, this, &Controller::finishScreenshot);
@@ -58,7 +59,9 @@ void Controller::screenshot()
     }
 
     m_screenshotInProgress = true;
-    m_wasVisibleBeforeScreenshot = isVisible();
+    // Bring it back afterwards if it was on screen, or if a text field is
+    // still active (the tray menu may have hidden it moments ago).
+    m_wasVisibleBeforeScreenshot = isVisible() || m_imActive;
     m_keyboard->releaseAll();
     m_keyboard->hide(); // just unmap; keep the input-method context alive
 
@@ -222,17 +225,56 @@ void Controller::quit()
 
 void Controller::imActivated()
 {
+    m_imActive = true;
     m_hideTimer.stop();
+    m_activeWindowAtShow = m_activeWindow ? m_activeWindow() : QString();
     // In input-panel mode KWin decides whether the mapped panel is shown.
     showPanel();
 }
 
 void Controller::imDeactivated()
 {
+    m_imActive = false;
     m_keyboard->releaseAll();
     // Unmap once focus has really left a text field. KWin does not hide an
     // input panel on its own when focus moves to a window without text input
     // (the desktop, a file manager ...); Maliit and plasma-keyboard unmap too,
     // and KWin re-shows the surface when it is mapped again on activation.
-    m_hideTimer.start();
+    scheduleAutoHide();
+}
+
+void Controller::activeWindowChanged(const QString &id)
+{
+    // Another application became active while no text field is focused.
+    if (!m_imActive && m_keyboard->isVisible() && !id.isEmpty() && id != m_activeWindowAtShow) {
+        m_hideTimer.start(kHideAfterAppSwitchMs);
+    }
+}
+
+void Controller::holdOpen(bool hold)
+{
+    m_holdOpen = hold;
+    if (hold) {
+        m_hideTimer.stop();
+    } else if (!m_imActive && m_keyboard->isVisible()) {
+        scheduleAutoHide();
+    }
+}
+
+void Controller::scheduleAutoHide()
+{
+    if (m_holdOpen) {
+        return;
+    }
+    const QString now = m_activeWindow ? m_activeWindow() : QString();
+    const bool switchedApp = !now.isEmpty() && now != m_activeWindowAtShow;
+    m_hideTimer.start(switchedApp ? kHideAfterAppSwitchMs : kHideAfterFocusLossMs);
+}
+
+void Controller::autoHideNow()
+{
+    if (m_imActive || m_holdOpen || m_screenshotInProgress) {
+        return;
+    }
+    m_keyboard->hide();
 }

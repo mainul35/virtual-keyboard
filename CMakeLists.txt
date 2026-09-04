@@ -64,8 +64,9 @@ if(VKBD_WAYLAND)
             NO_INCLUDE_CORE_ONLY
             FILES ${CMAKE_CURRENT_SOURCE_DIR}/protocols/input-method-unstable-v1.xml
                   ${CMAKE_CURRENT_SOURCE_DIR}/protocols/slide.xml
+                  ${CMAKE_CURRENT_SOURCE_DIR}/protocols/plasma-window-management.xml
         )
-        target_sources(vkbd PRIVATE src/wayland/inputmethod.cpp)
+        target_sources(vkbd PRIVATE src/wayland/inputmethod.cpp src/wayland/windowtracker.cpp)
         target_link_libraries(vkbd PRIVATE Qt6::WaylandClient PkgConfig::WAYLAND_CLIENT)
         target_compile_definitions(vkbd PRIVATE VKBD_HAVE_WAYLAND=1)
         message(STATUS "vkbd: Wayland input-method-v1 integration enabled")
