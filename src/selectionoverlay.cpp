@@ -22,6 +22,51 @@ QPointF SelectionOverlay::normalise(const QPointF &local) const
     return QPointF(onScreen.x() / w, onScreen.y() / h);
 }
 
+void SelectionOverlay::showEvent(QShowEvent *e)
+{
+    QWidget::showEvent(e);
+    m_localPath.clear();
+    m_active = false;
+    m_touchId = -1;
+}
+
+void SelectionOverlay::begin(const QPointF &local)
+{
+    m_active = true;
+    m_localPath.clear();
+    m_localPath.append(local);
+    update();
+}
+
+void SelectionOverlay::move(const QPointF &local)
+{
+    if (!m_active) {
+        return;
+    }
+    if (m_localPath.isEmpty() || (m_localPath.last() - local).manhattanLength() >= 2.0) {
+        m_localPath.append(local);
+        update();
+    }
+}
+
+void SelectionOverlay::finish()
+{
+    if (!m_active) {
+        return;
+    }
+    m_active = false;
+    QVector<QPointF> path;
+    path.reserve(m_localPath.size());
+    for (const QPointF &p : std::as_const(m_localPath)) {
+        path.append(normalise(p));
+    }
+    m_localPath.clear();
+    update();
+    if (m_onGesture) {
+        m_onGesture(path);
+    }
+}
+
 bool SelectionOverlay::event(QEvent *e)
 {
     switch (e->type()) {
@@ -33,22 +78,19 @@ bool SelectionOverlay::event(QEvent *e)
         for (const QEventPoint &pt : te->points()) {
             if (pt.state() == QEventPoint::Pressed && m_touchId < 0) {
                 m_touchId = pt.id();
-                m_active = true;
-                Q_EMIT gestureBegan(normalise(pt.position()));
+                begin(pt.position());
             } else if (pt.id() == m_touchId) {
                 if (pt.state() == QEventPoint::Updated) {
-                    Q_EMIT gestureMoved(normalise(pt.position()));
+                    move(pt.position());
                 } else if (pt.state() == QEventPoint::Released) {
                     m_touchId = -1;
-                    m_active = false;
-                    Q_EMIT gestureEnded();
+                    finish();
                 }
             }
         }
         if (e->type() == QEvent::TouchCancel && m_active) {
             m_touchId = -1;
-            m_active = false;
-            Q_EMIT gestureEnded();
+            finish();
         }
         e->accept();
         return true;
@@ -61,39 +103,52 @@ bool SelectionOverlay::event(QEvent *e)
 void SelectionOverlay::mousePressEvent(QMouseEvent *e)
 {
     if (e->button() == Qt::LeftButton && !m_active) {
-        m_active = true;
-        Q_EMIT gestureBegan(normalise(e->position()));
+        begin(e->position());
     }
     e->accept();
 }
 
 void SelectionOverlay::mouseMoveEvent(QMouseEvent *e)
 {
-    if (m_active && m_touchId < 0) {
-        Q_EMIT gestureMoved(normalise(e->position()));
+    if (m_touchId < 0) {
+        move(e->position());
     }
     e->accept();
 }
 
 void SelectionOverlay::mouseReleaseEvent(QMouseEvent *e)
 {
-    if (e->button() == Qt::LeftButton && m_active && m_touchId < 0) {
-        m_active = false;
-        Q_EMIT gestureEnded();
+    if (e->button() == Qt::LeftButton && m_touchId < 0) {
+        finish();
     }
     e->accept();
 }
 
 void SelectionOverlay::paintEvent(QPaintEvent *)
 {
-    // Almost invisible tint plus a thin frame so the mode is recognisable.
     QPainter p(this);
-    QColor tint = palette().color(QPalette::Highlight);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const QColor hl = palette().color(QPalette::Highlight);
+
+    // Faint tint plus a frame so the mode is recognisable.
+    QColor tint = hl;
     tint.setAlphaF(0.04);
     p.fillRect(rect(), tint);
-    QColor frame = palette().color(QPalette::Highlight);
+    QColor frame = hl;
     frame.setAlphaF(0.8);
     p.setPen(QPen(frame, 4));
     p.setBrush(Qt::NoBrush);
     p.drawRect(rect().adjusted(2, 2, -2, -2));
+
+    // Rubber band: the path so far and both end points.
+    if (m_localPath.size() >= 1) {
+        QColor band = hl;
+        band.setAlphaF(0.9);
+        p.setPen(QPen(band, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPolyline(m_localPath.constData(), m_localPath.size());
+        p.setBrush(band);
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(m_localPath.first(), 7, 7);
+        p.drawEllipse(m_localPath.last(), 7, 7);
+    }
 }

@@ -601,10 +601,7 @@ int main(int argc, char **argv)
         qInfo() << "vkbd: Sel uses pointer-drag selection";
     }
 #endif
-    QTimer pressTimer;
-    pressTimer.setSingleShot(true);
-    pressTimer.setInterval(60);
-    QObject::connect(&pressTimer, &QTimer::timeout, &keyboard, [&] { pointer.leftButton(true); });
+    bool replaying = false;
     QObject::connect(&keyboard, &KeyboardWidget::selectModeChanged, &keyboard, [&](bool on) {
         if (!dragSelection) {
             return;
@@ -620,40 +617,64 @@ int main(int argc, char **argv)
             selectionOverlay->resize(sz.width(), std::max(50, sz.height() - keyboard.height()));
             selectionOverlay->show();
         } else {
-            pressTimer.stop();
-            pointer.leftButton(false);
             selectionOverlay->hide();
-            // Give the compositor a moment to deliver the release before the
-            // device disappears again (no permanent mouse cursor).
-            QTimer::singleShot(400, &keyboard, [&] {
-                if (!keyboard.selectMode()) {
+            // Keep the device until a replay in flight has finished; then drop
+            // it so no permanent mouse cursor is left on screen.
+            QTimer::singleShot(1500, &keyboard, [&] {
+                if (!keyboard.selectMode() && !replaying) {
                     pointer.close();
                 }
             });
         }
     });
     if (selectionOverlay) {
-        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureBegan, &keyboard, [&](const QPointF &n) {
-            pointer.moveTo(n.x(), n.y());
-            pressTimer.start(); // let the pointer arrive before pressing
-        });
-        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureMoved, &keyboard, [&](const QPointF &n) {
-            if (pressTimer.isActive()) {
-                pressTimer.stop();
-                pointer.leftButton(true);
+        // The finger lifted: take the overlay down, then replay the recorded
+        // path as press / drag / release through the virtual mouse.
+        selectionOverlay->setOnGesture([&](const QVector<QPointF> &path) {
+            if (path.isEmpty()) {
+                return;
             }
-            pointer.moveTo(n.x(), n.y());
-        });
-        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureEnded, &keyboard, [&] {
-            if (pressTimer.isActive()) {
-                pressTimer.stop();
-                pointer.leftButton(true);
+            selectionOverlay->hide();
+            keyboard.setSelectMode(false); // Sel is one-shot
+            // Subsample long paths so the replay stays quick.
+            QVector<QPointF> steps;
+            const int maxSteps = 40;
+            const int stride = std::max(1, static_cast<int>(path.size()) / maxSteps);
+            for (int i = 0; i < path.size(); i += stride) {
+                steps.append(path[i]);
             }
-            // Release shortly after the last motion, then leave Sel mode.
-            QTimer::singleShot(40, &keyboard, [&] {
-                pointer.leftButton(false);
-                QTimer::singleShot(120, &keyboard, [&] { keyboard.setSelectMode(false); });
+            if (steps.last() != path.last()) {
+                steps.append(path.last());
+            }
+            replaying = true;
+            auto *timer = new QTimer(&keyboard);
+            int index = -2; // -2: hover to start, -1: press, 0..n-1: drag, n: release
+            timer->setInterval(14);
+            QObject::connect(timer, &QTimer::timeout, &keyboard, [&, timer, steps, index]() mutable {
+                if (index == -2) {
+                    pointer.moveTo(steps.first().x(), steps.first().y());
+                    timer->setInterval(60); // let the pointer arrive before pressing
+                } else if (index == -1) {
+                    pointer.leftButton(true);
+                    timer->setInterval(14);
+                } else if (index < steps.size()) {
+                    pointer.moveTo(steps[index].x(), steps[index].y());
+                } else {
+                    pointer.leftButton(false);
+                    timer->stop();
+                    timer->deleteLater();
+                    replaying = false;
+                    QTimer::singleShot(300, &keyboard, [&] {
+                        if (!keyboard.selectMode()) {
+                            pointer.close();
+                        }
+                    });
+                    return;
+                }
+                ++index;
             });
+            // Wait for the overlay to be unmapped before the first pointer event.
+            QTimer::singleShot(120, timer, [timer] { timer->start(); });
         });
     }
 
