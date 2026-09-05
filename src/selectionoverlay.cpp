@@ -1,5 +1,6 @@
 #include "selectionoverlay.h"
 
+#include <QDebug>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -25,6 +26,7 @@ QPointF SelectionOverlay::normalise(const QPointF &local) const
 void SelectionOverlay::showEvent(QShowEvent *e)
 {
     QWidget::showEvent(e);
+    qInfo() << "vkbd: selection overlay shown, size" << size() << "screen" << m_screen;
     m_localPath.clear();
     m_active = false;
     m_touchId = -1;
@@ -32,6 +34,7 @@ void SelectionOverlay::showEvent(QShowEvent *e)
 
 void SelectionOverlay::begin(const QPointF &local)
 {
+    qInfo() << "vkbd: selection gesture began at" << local << "overlay" << geometry();
     m_active = true;
     m_localPath.clear();
     m_localPath.append(local);
@@ -62,6 +65,7 @@ void SelectionOverlay::finish()
     }
     m_localPath.clear();
     update();
+    qInfo() << "vkbd: selection gesture ended," << path.size() << "points, from" << (path.isEmpty() ? QPointF() : path.first()) << "to" << (path.isEmpty() ? QPointF() : path.last());
     if (m_onGesture) {
         m_onGesture(path);
     }

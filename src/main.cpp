@@ -607,6 +607,7 @@ int main(int argc, char **argv)
             return;
         }
         if (on) {
+            qInfo() << "vkbd: Sel on";
             if (!pointer.open()) {
                 qWarning() << "vkbd: virtual pointer unavailable:" << pointer.error();
             }
@@ -617,6 +618,7 @@ int main(int argc, char **argv)
             selectionOverlay->resize(sz.width(), std::max(50, sz.height() - keyboard.height()));
             selectionOverlay->show();
         } else {
+            qInfo() << "vkbd: Sel off";
             selectionOverlay->hide();
             // Keep the device until a replay in flight has finished; then drop
             // it so no permanent mouse cursor is left on screen.
@@ -652,14 +654,17 @@ int main(int argc, char **argv)
             timer->setInterval(14);
             QObject::connect(timer, &QTimer::timeout, &keyboard, [&, timer, steps, index]() mutable {
                 if (index == -2) {
+                    qInfo() << "vkbd: replay: move to" << steps.first() << "pointer open" << pointer.isOpen();
                     pointer.moveTo(steps.first().x(), steps.first().y());
                     timer->setInterval(60); // let the pointer arrive before pressing
                 } else if (index == -1) {
+                    qInfo() << "vkbd: replay: press";
                     pointer.leftButton(true);
                     timer->setInterval(14);
                 } else if (index < steps.size()) {
                     pointer.moveTo(steps[index].x(), steps[index].y());
                 } else {
+                    qInfo() << "vkbd: replay: release at" << steps.last();
                     pointer.leftButton(false);
                     timer->stop();
                     timer->deleteLater();
