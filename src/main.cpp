@@ -4,6 +4,8 @@
 #include "injector.h"
 #include "keyboardwidget.h"
 #include "keymap.h"
+#include "pointerinjector.h"
+#include "selectionoverlay.h"
 #include "togglebutton.h"
 #include "uinputinjector.h"
 
@@ -574,6 +576,85 @@ int main(int argc, char **argv)
     });
     if (wantTray && !tray) {
         trayRetry.start();
+    }
+
+    // ---- Sel: replay a finger gesture as a real pointer drag ---------------
+    // Needs /dev/uinput for the virtual mouse and layer-shell for a capture
+    // layer over the app; otherwise Sel falls back to holding Shift.
+    std::unique_ptr<SelectionOverlay> selectionOverlay;
+    PointerInjector pointer;
+    bool dragSelection = false;
+#ifdef VKBD_HAVE_LAYER_SHELL
+    if (wayland && uinput && uinput->isOpen()) {
+        selectionOverlay = std::make_unique<SelectionOverlay>();
+        selectionOverlay->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
+        selectionOverlay->winId();
+        auto *lw = LayerShellQt::Window::get(selectionOverlay->windowHandle());
+        lw->setScope(QStringLiteral("vkbd-select"));
+        lw->setLayer(LayerShellQt::Window::LayerOverlay);
+        lw->setAnchors(LayerShellQt::Window::Anchors({LayerShellQt::Window::AnchorTop, LayerShellQt::Window::AnchorLeft, LayerShellQt::Window::AnchorRight}));
+        lw->setExclusiveZone(0);
+        lw->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+        lw->setActivateOnShow(false);
+        dragSelection = true;
+        keyboard.setSelectHoldsShift(false);
+        qInfo() << "vkbd: Sel uses pointer-drag selection";
+    }
+#endif
+    QTimer pressTimer;
+    pressTimer.setSingleShot(true);
+    pressTimer.setInterval(60);
+    QObject::connect(&pressTimer, &QTimer::timeout, &keyboard, [&] { pointer.leftButton(true); });
+    QObject::connect(&keyboard, &KeyboardWidget::selectModeChanged, &keyboard, [&](bool on) {
+        if (!dragSelection) {
+            return;
+        }
+        if (on) {
+            if (!pointer.open()) {
+                qWarning() << "vkbd: virtual pointer unavailable:" << pointer.error();
+            }
+            QScreen *screen = keyboard.windowHandle() && keyboard.windowHandle()->screen() ? keyboard.windowHandle()->screen() : app.primaryScreen();
+            const QSize sz = screen ? screen->geometry().size() : QSize(1280, 800);
+            selectionOverlay->setScreenSize(sz);
+            // Cover everything above the keyboard, never the keyboard itself.
+            selectionOverlay->resize(sz.width(), std::max(50, sz.height() - keyboard.height()));
+            selectionOverlay->show();
+        } else {
+            pressTimer.stop();
+            pointer.leftButton(false);
+            selectionOverlay->hide();
+            // Give the compositor a moment to deliver the release before the
+            // device disappears again (no permanent mouse cursor).
+            QTimer::singleShot(400, &keyboard, [&] {
+                if (!keyboard.selectMode()) {
+                    pointer.close();
+                }
+            });
+        }
+    });
+    if (selectionOverlay) {
+        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureBegan, &keyboard, [&](const QPointF &n) {
+            pointer.moveTo(n.x(), n.y());
+            pressTimer.start(); // let the pointer arrive before pressing
+        });
+        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureMoved, &keyboard, [&](const QPointF &n) {
+            if (pressTimer.isActive()) {
+                pressTimer.stop();
+                pointer.leftButton(true);
+            }
+            pointer.moveTo(n.x(), n.y());
+        });
+        QObject::connect(selectionOverlay.get(), &SelectionOverlay::gestureEnded, &keyboard, [&] {
+            if (pressTimer.isActive()) {
+                pressTimer.stop();
+                pointer.leftButton(true);
+            }
+            // Release shortly after the last motion, then leave Sel mode.
+            QTimer::singleShot(40, &keyboard, [&] {
+                pointer.leftButton(false);
+                QTimer::singleShot(120, &keyboard, [&] { keyboard.setSelectMode(false); });
+            });
+        });
     }
 
     std::unique_ptr<ToggleButton> toggleButton;

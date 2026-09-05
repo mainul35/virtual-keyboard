@@ -519,23 +519,26 @@ void KeyboardWidget::setSelectMode(bool on)
         return;
     }
     m_selectMode = on;
-    ModInfo &shift = m_mods[KEY_LEFTSHIFT];
-    if (on) {
-        if (!shift.down) {
-            inject(KEY_LEFTSHIFT, true);
-            shift.down = true;
+    if (m_selectHoldsShift) {
+        ModInfo &shift = m_mods[KEY_LEFTSHIFT];
+        if (on) {
+            if (!shift.down) {
+                inject(KEY_LEFTSHIFT, true);
+                shift.down = true;
+            }
+            shift.state = ModState::Held;
+            shift.before = ModState::Idle;
+            shift.used = false;
+        } else {
+            if (shift.down) {
+                inject(KEY_LEFTSHIFT, false);
+                shift.down = false;
+            }
+            shift.state = ModState::Idle;
         }
-        shift.state = ModState::Held;
-        shift.before = ModState::Idle;
-        shift.used = false;
-    } else {
-        if (shift.down) {
-            inject(KEY_LEFTSHIFT, false);
-            shift.down = false;
-        }
-        shift.state = ModState::Idle;
     }
     update();
+    Q_EMIT selectModeChanged(on);
 }
 
 void KeyboardWidget::tapKey(int code)
@@ -581,10 +584,14 @@ void KeyboardWidget::releaseAll()
         }
         info = ModInfo{};
     }
+    const bool wasSelecting = m_selectMode;
     m_selectMode = false;
     m_touchToSlot.clear();
     m_mouseSlot = -1;
     update();
+    if (wasSelecting) {
+        Q_EMIT selectModeChanged(false);
+    }
 }
 
 // ---------------------------------------------------------------- painting --

@@ -16,10 +16,13 @@ you everything the stock Maliit keyboard leaves out:
   `?123` symbols page like Android/iOS, a utility row with Esc/Tab/Ctrl/Alt/
   arrows/Del, and a wide centred space bar) and the full PC layout for
   landscape. Key labels follow your real xkb layout.
-* A **Sel** key (on the Fn page) for selecting text by touch: tap where the
-  selection should start, press Fn then Sel, tap where it should end. Sel holds Shift for you so the
-  second tap is a Shift+click, which browsers, editors, terminals and most
-  Qt/GTK apps treat as "extend the selection to here". Press Sel again to end.
+* A **Sel** key (on the Fn page) for selecting text by touch. Press Fn, Sel,
+  then drag your finger over the text: vkbd captures the gesture on a
+  transparent layer and replays it as a real mouse drag through a virtual
+  pointer, so every app (browsers, editors, terminals, PDF viewers) selects
+  exactly as with a mouse. Sel switches off by itself after the gesture.
+  Without /dev/uinput or layer-shell it falls back to holding Shift, where a
+  tap after Sel extends the selection to the tapped point.
 * A key preview bubble: while a character key is held, an enlarged copy of its
   label pops up above it (Android/iOS style); `keyPreview=false` or
   `--no-preview` turns it off.

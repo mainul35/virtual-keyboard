@@ -36,6 +36,11 @@ public:
     void setFeedback(Feedback *feedback) { m_feedback = feedback; }
     // Enlarged copy of a character key's label shown above it while pressed.
     void setKeyPreview(bool enabled);
+    // When false, Sel does not hold Shift (a pointer-drag overlay handles the
+    // selection instead); it just toggles the mode and emits selectModeChanged.
+    void setSelectHoldsShift(bool holds) { m_selectHoldsShift = holds; }
+    bool selectMode() const { return m_selectMode; }
+    void setSelectMode(bool on);
     // How long the bubble stays after the finger lifts (ms).
     void setKeyPreviewLinger(int ms) { m_previewLingerMs = ms; }
     // Mark a key as pressed for rendering only (layout previews); no key is sent.
@@ -54,6 +59,7 @@ public:
 Q_SIGNALS:
     void hideRequested();
     void screenshotRequested();
+    void selectModeChanged(bool on);
 
 protected:
     bool event(QEvent *e) override;
@@ -103,13 +109,13 @@ private:
     QRectF previewRect(int idx) const;
     void paintPreview(QPainter &p, int idx);
     void updateSlot(int idx);
-    void setSelectMode(bool on);
     void updateSlotsWithCode(int code);
     void updateAllCharKeys();
 
     Injector *m_injector;
     Feedback *m_feedback = nullptr;
     bool m_selectMode = false; // Shift held for the next tap in the application
+    bool m_selectHoldsShift = true;
     bool m_keyPreview = true;
     int m_previewLingerMs = 300;
     QSet<int> m_lingerSlots;   // released keys whose bubble is still showing
