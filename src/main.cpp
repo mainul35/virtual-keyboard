@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "doctor.h"
+#include "feedback.h"
 #include "injector.h"
 #include "keyboardwidget.h"
 #include "keymap.h"
@@ -147,6 +148,7 @@ int main(int argc, char **argv)
         {QStringLiteral("no-fn-row"), QStringLiteral("Hide the Esc/F1-F12/Del row of the full layout.")},
         {QStringLiteral("toggle-button"), QStringLiteral("Always show the floating show/hide button.")},
         {QStringLiteral("no-tray"), QStringLiteral("Do not add an icon to the system tray.")},
+        {QStringLiteral("no-sound"), QStringLiteral("Disable the key click sound.")},
         {QStringLiteral("self-test"), QStringLiteral("Report which input backends work, press/release Shift once, and exit.")},
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
     });
@@ -176,6 +178,8 @@ int main(int argc, char **argv)
     std::shared_ptr<Keymap> systemKeymap = Keymap::fromSystemConfig();
     const bool wantToggleButton = parser.isSet(QStringLiteral("toggle-button")) || settings.value(QStringLiteral("toggleButton"), false).toBool();
     const bool wantTray = !parser.isSet(QStringLiteral("no-tray")) && settings.value(QStringLiteral("tray"), true).toBool();
+    const bool wantSound = !parser.isSet(QStringLiteral("no-sound")) && settings.value(QStringLiteral("sound"), true).toBool();
+    const double soundVolumeDb = settings.value(QStringLiteral("soundVolume"), -8.0).toDouble();
 
     // ---- layout preview: no compositor needed (QT_QPA_PLATFORM=offscreen works)
     if (parser.isSet(QStringLiteral("render"))) {
@@ -323,6 +327,13 @@ int main(int argc, char **argv)
     // ---- the panel ----------------------------------------------------------
     KeyboardWidget keyboard(&router);
     keyboard.setWindowTitle(QStringLiteral("vkbd"));
+    Feedback feedback;
+    feedback.setSoundEnabled(wantSound);
+    feedback.setVolumeDb(soundVolumeDb);
+    keyboard.setFeedback(&feedback);
+    if (wantSound && !feedback.soundAvailable()) {
+        qInfo() << "vkbd: key sound unavailable (libcanberra0 not installed?)";
+    }
     keyboard.setFunctionRowVisible(fnRow);
     keyboard.setLayoutMode(layoutMode);
     keyboard.setKeymap(systemKeymap);

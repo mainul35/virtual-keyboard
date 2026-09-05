@@ -86,6 +86,7 @@ RowDef utilityRow()
         act("Fn", KeyAction::PageFn),
         sp("←", KEY_LEFT), sp("↑", KEY_UP), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
         sp("Del", KEY_DELETE),
+        act("Sel", KeyAction::SelectMode),
         act("⌄", KeyAction::Hide),
     };
     return r;
@@ -130,6 +131,7 @@ PageDef Layout::fullPage(bool withFunctionRow)
             sp("F9", KEY_F9), sp("F10", KEY_F10), sp("F11", KEY_F11), sp("F12", KEY_F12),
             act("PrtSc", KeyAction::Screenshot),
             sp("Del", KEY_DELETE),
+            act("Sel", KeyAction::SelectMode),
             act("⌄", KeyAction::Hide),
         };
         page.rows.push_back(fn);
@@ -177,8 +179,9 @@ PageDef Layout::fullPage(bool withFunctionRow)
         sp("←", KEY_LEFT), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
     }};
     if (!withFunctionRow) {
-        // The hide key normally lives in the function row.
-        bottom.keys[3].width = 5.25f;
+        // The hide and select keys normally live in the function row.
+        bottom.keys[3].width = 4.25f;
+        bottom.keys.push_back(act("Sel", KeyAction::SelectMode));
         bottom.keys.push_back(act("⌄", KeyAction::Hide));
     }
     page.rows.push_back(bottom);
@@ -303,7 +306,8 @@ PageDef Layout::fnPage()
 
     page.rows.push_back(RowDef{{
         act("abc", KeyAction::PageMain, 1.5f),
-        sp("", KEY_SPACE, 6.0f),
+        sp("", KEY_SPACE, 4.5f),
+        act("Sel", KeyAction::SelectMode, 1.5f),
         sp("←", KEY_LEFT), sp("↓", KEY_DOWN), sp("→", KEY_RIGHT),
         act("⌄", KeyAction::Hide, 1.5f),
     }});

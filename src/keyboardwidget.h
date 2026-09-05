@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+class Feedback;
 class Injector;
 class Keymap;
 
@@ -32,6 +33,7 @@ public:
     void setFunctionRowVisible(bool visible);
     bool functionRowVisible() const { return m_fnRow; }
     void setLayoutMode(LayoutMode mode);
+    void setFeedback(Feedback *feedback) { m_feedback = feedback; }
 
     // Release every key and modifier we are holding (called when the panel
     // is hidden or the compositor deactivates us).
@@ -91,10 +93,13 @@ private:
     QString labelFor(const KeyDef &def, bool shifted) const;
     void paintKey(QPainter &p, int idx);
     void paintHideGlyph(QPainter &p, const QRectF &r, const QColor &color);
+    void setSelectMode(bool on);
     void updateSlotsWithCode(int code);
     void updateAllCharKeys();
 
     Injector *m_injector;
+    Feedback *m_feedback = nullptr;
+    bool m_selectMode = false; // Shift held for the next tap in the application
     PageDef m_fullPage;
     PageDef m_compactPage;
     PageDef m_symbolsPage;

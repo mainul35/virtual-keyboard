@@ -16,6 +16,14 @@ you everything the stock Maliit keyboard leaves out:
   `?123` symbols page like Android/iOS, a utility row with Esc/Tab/Ctrl/Alt/
   arrows/Del, and a wide centred space bar) and the full PC layout for
   landscape. Key labels follow your real xkb layout.
+* A **Sel** key for selecting text by touch: tap where the selection should
+  start, press Sel, tap where it should end. Sel holds Shift for you so the
+  second tap is a Shift+click, which browsers, editors, terminals and most
+  Qt/GTK apps treat as "extend the selection to here". Press Sel again to end.
+* A short click sound on every key press (libcanberra, the freedesktop
+  event-sound library used by Plasma and GNOME alike; `sound=false` or
+  `--no-sound` turns it off, `soundVolume=-8` sets the level in dB). No
+  vibration: x86 tablets expose no haptic device to Linux.
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
   focus leaves, and it never steals focus from the app you are typing into.
   Popups and menus (including vkbd's own tray menu) do not make it disappear:
@@ -99,7 +107,7 @@ so the udev rule and `input` group membership are required in this mode.
 
 ```
 vkbd [--show|--hide|--toggle|--quit|--copy|--paste] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
-     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray]
+     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray] [--no-sound]
 vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release
 vkbd --render preview.png:1280x800     # draw the layout to a PNG (QT_QPA_PLATFORM=offscreen works)
@@ -114,6 +122,8 @@ layout=auto        ; compact (portrait style), full (PC style) or auto by orient
 fnRow=true         ; Esc/F1–F12/Del row of the full layout
 toggleButton=false ; always show the floating show/hide button
 tray=true          ; keyboard icon in the system tray (click = show/hide)
+sound=true         ; key click sound
+soundVolume=-8     ; click volume in dB (0 = loudest, -20 = quiet)
 backend=auto
 shell=auto
 ```

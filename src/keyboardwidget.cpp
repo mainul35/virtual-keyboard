@@ -1,5 +1,6 @@
 #include "keyboardwidget.h"
 
+#include "feedback.h"
 #include "injector.h"
 #include "keymap.h"
 
@@ -310,6 +311,10 @@ void KeyboardWidget::pressModifier(int code)
 
 void KeyboardWidget::releaseModifier(int code)
 {
+    if (m_selectMode && (code == KEY_LEFTSHIFT || code == KEY_RIGHTSHIFT)) {
+        setSelectMode(false);
+        return;
+    }
     ModInfo &info = m_mods[code];
     // The physical press always ends with the finger; sticky states are
     // re-applied around the next key press by engageStickyModifiers().
@@ -385,6 +390,9 @@ void KeyboardWidget::pressSlot(int idx)
     const KeyDef &def = *m_slots[idx].def;
     m_pressed[idx] = true;
     update(m_slots[idx].rect.toAlignedRect());
+    if (m_feedback) {
+        m_feedback->keyPressed();
+    }
 
     switch (def.kind) {
     case KeyKind::Modifier:
@@ -454,11 +462,42 @@ void KeyboardWidget::releaseSlot(int idx)
             releaseStickyModifiers();
             Q_EMIT screenshotRequested();
             break;
+        case KeyAction::SelectMode:
+            setSelectMode(!m_selectMode);
+            break;
         case KeyAction::None:
             break;
         }
         break;
     }
+}
+
+// Selection mode keeps Shift physically pressed so that a tap in the
+// application becomes Shift+click, which extends the selection from the
+// caret (or the previous tap) to the tapped position in most toolkits.
+void KeyboardWidget::setSelectMode(bool on)
+{
+    if (m_selectMode == on) {
+        return;
+    }
+    m_selectMode = on;
+    ModInfo &shift = m_mods[KEY_LEFTSHIFT];
+    if (on) {
+        if (!shift.down) {
+            inject(KEY_LEFTSHIFT, true);
+            shift.down = true;
+        }
+        shift.state = ModState::Held;
+        shift.before = ModState::Idle;
+        shift.used = false;
+    } else {
+        if (shift.down) {
+            inject(KEY_LEFTSHIFT, false);
+            shift.down = false;
+        }
+        shift.state = ModState::Idle;
+    }
+    update();
 }
 
 void KeyboardWidget::tapKey(int code)
@@ -504,6 +543,7 @@ void KeyboardWidget::releaseAll()
         }
         info = ModInfo{};
     }
+    m_selectMode = false;
     m_touchToSlot.clear();
     m_mouseSlot = -1;
     update();
@@ -627,6 +667,9 @@ void KeyboardWidget::paintKey(QPainter &p, int idx)
     } else if (def.kind == KeyKind::Lock && def.code == KEY_CAPSLOCK) {
         engaged = m_capsLock;
         locked = m_capsLock;
+    } else if (def.kind == KeyKind::Action && def.action == KeyAction::SelectMode) {
+        engaged = m_selectMode;
+        locked = m_selectMode;
     }
 
     if (m_pressed[idx] || locked) {

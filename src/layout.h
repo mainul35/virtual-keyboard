@@ -22,6 +22,7 @@ enum class KeyAction {
     PageSymbols,  // "?123"
     PageSymbols2, // "=\<"
     Screenshot,   // capture the screen to the clipboard (hides the panel first)
+    SelectMode,   // hold Shift so the next tap in the app extends the selection
 };
 
 struct KeyDef {
