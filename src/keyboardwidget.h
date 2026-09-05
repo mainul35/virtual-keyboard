@@ -34,6 +34,10 @@ public:
     bool functionRowVisible() const { return m_fnRow; }
     void setLayoutMode(LayoutMode mode);
     void setFeedback(Feedback *feedback) { m_feedback = feedback; }
+    // Enlarged copy of a character key's label shown above it while pressed.
+    void setKeyPreview(bool enabled);
+    // Mark a key as pressed for rendering only (layout previews); no key is sent.
+    void debugPressCode(int code);
 
     // Release every key and modifier we are holding (called when the panel
     // is hidden or the compositor deactivates us).
@@ -93,6 +97,10 @@ private:
     QString labelFor(const KeyDef &def, bool shifted) const;
     void paintKey(QPainter &p, int idx);
     void paintHideGlyph(QPainter &p, const QRectF &r, const QColor &color);
+    bool hasPreview(int idx) const;
+    QRectF previewRect(int idx) const;
+    void paintPreview(QPainter &p, int idx);
+    void updateSlot(int idx);
     void setSelectMode(bool on);
     void updateSlotsWithCode(int code);
     void updateAllCharKeys();
@@ -100,6 +108,7 @@ private:
     Injector *m_injector;
     Feedback *m_feedback = nullptr;
     bool m_selectMode = false; // Shift held for the next tap in the application
+    bool m_keyPreview = true;
     PageDef m_fullPage;
     PageDef m_compactPage;
     PageDef m_symbolsPage;

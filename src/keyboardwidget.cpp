@@ -62,6 +62,23 @@ void KeyboardWidget::setFunctionRowVisible(bool visible)
     update();
 }
 
+void KeyboardWidget::setKeyPreview(bool enabled)
+{
+    m_keyPreview = enabled;
+    update();
+}
+
+void KeyboardWidget::debugPressCode(int code)
+{
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+        if (m_slots[i].def->code == code) {
+            m_pressed[i] = true;
+            update();
+            return;
+        }
+    }
+}
+
 void KeyboardWidget::setLayoutMode(LayoutMode mode)
 {
     if (m_layoutMode == mode) {
@@ -389,7 +406,7 @@ void KeyboardWidget::pressSlot(int idx)
     }
     const KeyDef &def = *m_slots[idx].def;
     m_pressed[idx] = true;
-    update(m_slots[idx].rect.toAlignedRect());
+    updateSlot(idx);
     if (m_feedback) {
         m_feedback->keyPressed();
     }
@@ -421,7 +438,7 @@ void KeyboardWidget::releaseSlot(int idx)
     }
     const KeyDef &def = *m_slots[idx].def;
     m_pressed[idx] = false;
-    update(m_slots[idx].rect.toAlignedRect());
+    updateSlot(idx);
 
     switch (def.kind) {
     case KeyKind::Modifier:
@@ -596,6 +613,79 @@ void KeyboardWidget::paintEvent(QPaintEvent *e)
             paintKey(p, static_cast<int>(i));
         }
     }
+    // Key previews go on top of everything else.
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+        const int idx = static_cast<int>(i);
+        if (hasPreview(idx) && previewRect(idx).toAlignedRect().intersects(e->rect())) {
+            paintPreview(p, idx);
+        }
+    }
+}
+
+void KeyboardWidget::updateSlot(int idx)
+{
+    QRect r = m_slots[idx].rect.toAlignedRect();
+    if (m_slots[idx].def->kind == KeyKind::Char) {
+        r = r.united(previewRect(idx).toAlignedRect().adjusted(-2, -2, 2, 2));
+    }
+    update(r);
+}
+
+bool KeyboardWidget::hasPreview(int idx) const
+{
+    return m_keyPreview && m_pressed[idx] && m_slots[idx].def->kind == KeyKind::Char;
+}
+
+// Bubble centred above the key, clamped to the panel so it never gets cut off.
+QRectF KeyboardWidget::previewRect(int idx) const
+{
+    const QRectF key = m_slots[idx].rect;
+    const qreal w = key.width() * 1.35;
+    const qreal h = key.height() * 1.15;
+    QRectF r(key.center().x() - w / 2, key.top() - h + key.height() * 0.15, w, h);
+    if (r.left() < 0) {
+        r.moveLeft(0);
+    }
+    if (r.right() > width()) {
+        r.moveRight(width());
+    }
+    if (r.top() < 0) {
+        r.moveTop(0);
+    }
+    return r;
+}
+
+void KeyboardWidget::paintPreview(QPainter &p, int idx)
+{
+    const KeyDef &def = *m_slots[idx].def;
+    const QPalette pal = palette();
+    const QRectF r = previewRect(idx);
+    const qreal radius = std::min(10.0, r.height() * 0.2);
+
+    const QColor base = pal.color(QPalette::Button);
+    const bool dark = base.lightness() < 128;
+    QColor fill = dark ? base.lighter(150) : QColor(Qt::white);
+    QColor shadow(0, 0, 0, dark ? 120 : 60);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(shadow);
+    p.drawRoundedRect(r.translated(0, 2), radius, radius);
+    p.setPen(QPen(pal.color(QPalette::Mid), 1));
+    p.setBrush(fill);
+    p.drawRoundedRect(r, radius, radius);
+
+    const bool shifted = shiftActive() || (m_capsLock && Layout::isLetterCode(def.code));
+    const QString label = labelFor(def, shifted);
+    QFont f = font();
+    qreal px = std::min(r.height() * 0.6, r.width() * 0.8);
+    if (label.size() > 1) {
+        px = std::min(px, r.width() * 1.5 / label.size());
+    }
+    f.setPixelSize(static_cast<int>(std::max(px, 10.0)));
+    f.setBold(false);
+    p.setFont(f);
+    p.setPen(pal.color(QPalette::ButtonText));
+    p.drawText(r, Qt::AlignCenter, label);
 }
 
 // A small keyboard outline with a chevron underneath: "put the keyboard away".

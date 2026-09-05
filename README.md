@@ -20,6 +20,9 @@ you everything the stock Maliit keyboard leaves out:
   selection should start, press Fn then Sel, tap where it should end. Sel holds Shift for you so the
   second tap is a Shift+click, which browsers, editors, terminals and most
   Qt/GTK apps treat as "extend the selection to here". Press Sel again to end.
+* A key preview bubble: while a character key is held, an enlarged copy of its
+  label pops up above it (Android/iOS style); `keyPreview=false` or
+  `--no-preview` turns it off.
 * A short click sound on every key press (libcanberra, the freedesktop
   event-sound library used by Plasma and GNOME alike; `sound=false` or
   `--no-sound` turns it off, `soundVolume=-8` sets the level in dB). No
@@ -107,7 +110,7 @@ so the udev rule and `input` group membership are required in this mode.
 
 ```
 vkbd [--show|--hide|--toggle|--quit|--copy|--paste] [--backend auto|im|uinput] [--shell auto|input-panel|layer-shell|plain]
-     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray] [--no-sound]
+     [--layout auto|compact|full] [--height 0.42] [--no-fn-row] [--toggle-button] [--no-tray] [--no-sound] [--no-preview]
 vkbd --doctor                          # diagnose the KWin integration
 vkbd --self-test                       # which backend works here? sends one Shift press/release
 vkbd --render preview.png:1280x800     # draw the layout to a PNG (QT_QPA_PLATFORM=offscreen works)
@@ -122,6 +125,7 @@ layout=auto        ; compact (portrait style), full (PC style) or auto by orient
 fnRow=true         ; Esc/F1–F12/Del row of the full layout
 toggleButton=false ; always show the floating show/hide button
 tray=true          ; keyboard icon in the system tray (click = show/hide)
+keyPreview=true    ; enlarged label above a pressed character key
 sound=true         ; key click sound
 soundVolume=-8     ; click volume in dB (0 = loudest, -20 = quiet)
 backend=auto

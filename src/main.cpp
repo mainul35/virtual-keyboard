@@ -149,6 +149,7 @@ int main(int argc, char **argv)
         {QStringLiteral("toggle-button"), QStringLiteral("Always show the floating show/hide button.")},
         {QStringLiteral("no-tray"), QStringLiteral("Do not add an icon to the system tray.")},
         {QStringLiteral("no-sound"), QStringLiteral("Disable the key click sound.")},
+        {QStringLiteral("no-preview"), QStringLiteral("Disable the enlarged key preview shown while a character key is pressed.")},
         {QStringLiteral("self-test"), QStringLiteral("Report which input backends work, press/release Shift once, and exit.")},
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
     });
@@ -180,6 +181,7 @@ int main(int argc, char **argv)
     const bool wantTray = !parser.isSet(QStringLiteral("no-tray")) && settings.value(QStringLiteral("tray"), true).toBool();
     const bool wantSound = !parser.isSet(QStringLiteral("no-sound")) && settings.value(QStringLiteral("sound"), true).toBool();
     const double soundVolumeDb = settings.value(QStringLiteral("soundVolume"), -8.0).toDouble();
+    const bool wantPreview = !parser.isSet(QStringLiteral("no-preview")) && settings.value(QStringLiteral("keyPreview"), true).toBool();
 
     // ---- layout preview: no compositor needed (QT_QPA_PLATFORM=offscreen works)
     if (parser.isSet(QStringLiteral("render"))) {
@@ -200,6 +202,9 @@ int main(int argc, char **argv)
         preview.setLayoutMode(layoutMode);
         preview.setKeymap(systemKeymap);
         preview.resize(QSize(size.width(), qRound(size.height() * (heightFraction > 0 ? heightFraction : 0.42))));
+        if (const int pressCode = qEnvironmentVariableIntValue("VKBD_RENDER_PRESS")) {
+            preview.debugPressCode(pressCode); // e.g. 32 = KEY_D, to preview the key bubble
+        }
         const bool ok = preview.grab().save(file);
         qInfo().noquote() << (ok ? "vkbd: wrote" : "vkbd: failed to write") << file << preview.size();
         return ok ? 0 : 1;
@@ -331,6 +336,7 @@ int main(int argc, char **argv)
     feedback.setSoundEnabled(wantSound);
     feedback.setVolumeDb(soundVolumeDb);
     keyboard.setFeedback(&feedback);
+    keyboard.setKeyPreview(wantPreview);
     if (wantSound && !feedback.soundAvailable()) {
         qInfo() << "vkbd: key sound unavailable (libcanberra0 not installed?)";
     }
