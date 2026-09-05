@@ -103,10 +103,10 @@ if [[ $DO_KWIN -eq 1 ]]; then
     if command -v kwriteconfig6 >/dev/null; then
         # KWin only (re)starts the input method when the command changes, so
         # clear it first to make sure the freshly installed binary is launched.
-        kwriteconfig6 --file kwinrc --group Wayland --key InputMethod ""
+        kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod ""
         sleep 1
-        kwriteconfig6 --file kwinrc --group Wayland --key InputMethod /usr/share/applications/vkbd.desktop
-        kwriteconfig6 --file kwinrc --group Wayland --key VirtualKeyboardEnabled true
+        kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod /usr/share/applications/vkbd.desktop
+        kwriteconfig6 --notify --file kwinrc --group Wayland --key VirtualKeyboardEnabled true
         if command -v qdbus6 >/dev/null; then
             qdbus6 org.kde.KWin /KWin reconfigure || true
         elif command -v qdbus >/dev/null; then
