@@ -126,6 +126,7 @@ fnRow=true         ; Esc/F1–F12/Del row of the full layout
 toggleButton=false ; always show the floating show/hide button
 tray=true          ; keyboard icon in the system tray (click = show/hide)
 keyPreview=true    ; enlarged label above a pressed character key
+keyPreviewLinger=300 ; how long (ms) the bubble stays after the finger lifts
 sound=true         ; key click sound
 soundVolume=-8     ; click volume in dB (0 = loudest, -20 = quiet)
 backend=auto

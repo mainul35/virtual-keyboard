@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QTimer>
 #include <QTouchEvent>
 
 #include <linux/input-event-codes.h>
@@ -154,6 +155,8 @@ void KeyboardWidget::rebuildSlots()
         }
     }
     m_tempShiftSlots.clear();
+    m_lingerSlots.clear();
+    ++m_lingerGeneration;
     m_slots.clear();
     m_touchToSlot.clear();
     m_mouseSlot = -1;
@@ -446,6 +449,16 @@ void KeyboardWidget::releaseSlot(int idx)
     }
     const KeyDef &def = *m_slots[idx].def;
     m_pressed[idx] = false;
+    if (def.kind == KeyKind::Char && m_keyPreview && m_previewLingerMs > 0) {
+        // Keep the bubble up briefly so a quick tap still shows it.
+        m_lingerSlots.insert(idx);
+        const int generation = m_lingerGeneration;
+        QTimer::singleShot(m_previewLingerMs, this, [this, idx, generation] {
+            if (generation == m_lingerGeneration && m_lingerSlots.remove(idx)) {
+                updateSlot(idx);
+            }
+        });
+    }
     updateSlot(idx);
 
     switch (def.kind) {
@@ -641,7 +654,7 @@ void KeyboardWidget::updateSlot(int idx)
 
 bool KeyboardWidget::hasPreview(int idx) const
 {
-    return m_keyPreview && m_pressed[idx] && m_slots[idx].def->kind == KeyKind::Char;
+    return m_keyPreview && m_slots[idx].def->kind == KeyKind::Char && (m_pressed[idx] || m_lingerSlots.contains(idx));
 }
 
 // Bubble centred above the key, clamped to the panel so it never gets cut off.

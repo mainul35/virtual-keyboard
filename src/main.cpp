@@ -182,6 +182,7 @@ int main(int argc, char **argv)
     const bool wantSound = !parser.isSet(QStringLiteral("no-sound")) && settings.value(QStringLiteral("sound"), true).toBool();
     const double soundVolumeDb = settings.value(QStringLiteral("soundVolume"), -8.0).toDouble();
     const bool wantPreview = !parser.isSet(QStringLiteral("no-preview")) && settings.value(QStringLiteral("keyPreview"), true).toBool();
+    const int previewLingerMs = settings.value(QStringLiteral("keyPreviewLinger"), 300).toInt();
 
     // ---- layout preview: no compositor needed (QT_QPA_PLATFORM=offscreen works)
     if (parser.isSet(QStringLiteral("render"))) {
@@ -337,6 +338,7 @@ int main(int argc, char **argv)
     feedback.setVolumeDb(soundVolumeDb);
     keyboard.setFeedback(&feedback);
     keyboard.setKeyPreview(wantPreview);
+    keyboard.setKeyPreviewLinger(previewLingerMs);
     if (wantSound && !feedback.soundAvailable()) {
         qInfo() << "vkbd: key sound unavailable (libcanberra0 not installed?)";
     }

@@ -36,6 +36,8 @@ public:
     void setFeedback(Feedback *feedback) { m_feedback = feedback; }
     // Enlarged copy of a character key's label shown above it while pressed.
     void setKeyPreview(bool enabled);
+    // How long the bubble stays after the finger lifts (ms).
+    void setKeyPreviewLinger(int ms) { m_previewLingerMs = ms; }
     // Mark a key as pressed for rendering only (layout previews); no key is sent.
     void debugPressCode(int code);
 
@@ -109,6 +111,9 @@ private:
     Feedback *m_feedback = nullptr;
     bool m_selectMode = false; // Shift held for the next tap in the application
     bool m_keyPreview = true;
+    int m_previewLingerMs = 300;
+    QSet<int> m_lingerSlots;   // released keys whose bubble is still showing
+    int m_lingerGeneration = 0; // invalidates pending linger timers on relayout
     PageDef m_fullPage;
     PageDef m_compactPage;
     PageDef m_symbolsPage;
