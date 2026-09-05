@@ -4,6 +4,7 @@
 #include "injector.h"
 #include "keymap.h"
 
+#include <QDebug>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -70,6 +71,13 @@ void KeyboardWidget::setKeyPreview(bool enabled)
 
 void KeyboardWidget::debugPressCode(int code)
 {
+    // A hidden widget only receives its resize event when it is grabbed or
+    // shown; settle the layout first so the pressed slot is not rebuilt away.
+    if (compactActive() != m_compactNow) {
+        rebuildSlots();
+    } else {
+        relayout();
+    }
     for (size_t i = 0; i < m_slots.size(); ++i) {
         if (m_slots[i].def->code == code) {
             m_pressed[i] = true;
