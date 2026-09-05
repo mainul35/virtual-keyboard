@@ -16,8 +16,8 @@ you everything the stock Maliit keyboard leaves out:
   `?123` symbols page like Android/iOS, a utility row with Esc/Tab/Ctrl/Alt/
   arrows/Del, and a wide centred space bar) and the full PC layout for
   landscape. Key labels follow your real xkb layout.
-* A **Sel** key for selecting text by touch: tap where the selection should
-  start, press Sel, tap where it should end. Sel holds Shift for you so the
+* A **Sel** key (on the Fn page) for selecting text by touch: tap where the
+  selection should start, press Fn then Sel, tap where it should end. Sel holds Shift for you so the
   second tap is a Shift+click, which browsers, editors, terminals and most
   Qt/GTK apps treat as "extend the selection to here". Press Sel again to end.
 * A short click sound on every key press (libcanberra, the freedesktop
