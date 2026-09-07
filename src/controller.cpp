@@ -163,9 +163,28 @@ void Controller::showPanel()
     }
 }
 
+void Controller::setAutoShowSuppressed(bool suppressed)
+{
+    if (m_autoShowSuppressed == suppressed) {
+        return;
+    }
+    m_autoShowSuppressed = suppressed;
+    if (suppressed) {
+        // A keyboard was plugged in: put the panel away unless the user
+        // asked for it explicitly.
+        if (!m_shownExplicitly && m_keyboard->isVisible()) {
+            m_keyboard->releaseAll();
+            m_keyboard->hide();
+        }
+    } else if (m_imActive) {
+        showPanel();
+    }
+}
+
 void Controller::show()
 {
     m_hideTimer.stop();
+    m_shownExplicitly = true;
     showPanel();
     if (m_mode == Mode::InputPanel) {
         // forceActivate makes KWin activate us even if the focused window has
@@ -184,6 +203,7 @@ void Controller::show()
 void Controller::hide()
 {
     m_hideTimer.stop();
+    m_shownExplicitly = false;
     m_keyboard->releaseAll();
     // Unmapping the surface is what actually removes the panel from the screen.
     // In input-panel mode also deactivate the context, so that tapping the
@@ -228,6 +248,9 @@ void Controller::imActivated()
     m_imActive = true;
     m_hideTimer.stop();
     m_activeWindowAtShow = m_activeWindow ? m_activeWindow() : QString();
+    if (m_autoShowSuppressed && !m_shownExplicitly) {
+        return; // a physical keyboard is connected; stay out of the way
+    }
     // In input-panel mode KWin decides whether the mapped panel is shown.
     showPanel();
 }
@@ -280,6 +303,7 @@ void Controller::scheduleAutoHide()
 
 void Controller::autoHideNow()
 {
+    m_shownExplicitly = false;
     if (m_imActive || m_holdOpen || m_screenshotInProgress) {
         return;
     }

@@ -30,6 +30,12 @@ you everything the stock Maliit keyboard leaves out:
   event-sound library used by Plasma and GNOME alike; `sound=false` or
   `--no-sound` turns it off, `soundVolume=-8` sets the level in dB). No
   vibration: x86 tablets expose no haptic device to Linux.
+* Stays out of the way when a real keyboard is connected: with a USB,
+  Bluetooth or dock keyboard present the panel is not shown automatically
+  (the tray icon still shows it on demand), and it comes back as soon as the
+  keyboard is unplugged. `hideWithPhysicalKeyboard=false` or
+  `--ignore-physical-keyboard` disables this; `vkbd --doctor` lists what it
+  detected.
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
   focus leaves, and it never steals focus from the app you are typing into.
   Popups and menus (including vkbd's own tray menu) do not make it disappear:
@@ -131,6 +137,7 @@ tray=true          ; keyboard icon in the system tray (click = show/hide)
 keyPreview=true    ; enlarged label above a pressed character key
 keyPreviewLinger=300 ; how long (ms) the bubble stays after the finger lifts
 sound=true         ; key click sound
+hideWithPhysicalKeyboard=true ; do not auto-show while a hardware keyboard is connected
 soundVolume=-8     ; click volume in dB (0 = loudest, -20 = quiet)
 backend=auto
 shell=auto

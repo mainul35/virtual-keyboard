@@ -4,6 +4,7 @@
 #include "injector.h"
 #include "keyboardwidget.h"
 #include "keymap.h"
+#include "physicalkeyboard.h"
 #include "pointerinjector.h"
 #include "selectionoverlay.h"
 #include "togglebutton.h"
@@ -151,6 +152,7 @@ int main(int argc, char **argv)
         {QStringLiteral("toggle-button"), QStringLiteral("Always show the floating show/hide button.")},
         {QStringLiteral("no-tray"), QStringLiteral("Do not add an icon to the system tray.")},
         {QStringLiteral("no-sound"), QStringLiteral("Disable the key click sound.")},
+        {QStringLiteral("ignore-physical-keyboard"), QStringLiteral("Show the panel even when a hardware keyboard is connected.")},
         {QStringLiteral("no-preview"), QStringLiteral("Disable the enlarged key preview shown while a character key is pressed.")},
         {QStringLiteral("self-test"), QStringLiteral("Report which input backends work, press/release Shift once, and exit.")},
         {QStringLiteral("render"), QStringLiteral("Render the keyboard at WIDTHxHEIGHT to a PNG file and exit (layout preview)."), QStringLiteral("file[:WxH]")},
@@ -183,6 +185,8 @@ int main(int argc, char **argv)
     const bool wantTray = !parser.isSet(QStringLiteral("no-tray")) && settings.value(QStringLiteral("tray"), true).toBool();
     const bool wantSound = !parser.isSet(QStringLiteral("no-sound")) && settings.value(QStringLiteral("sound"), true).toBool();
     const double soundVolumeDb = settings.value(QStringLiteral("soundVolume"), -8.0).toDouble();
+    const bool hideWithPhysicalKeyboard = !parser.isSet(QStringLiteral("ignore-physical-keyboard"))
+        && settings.value(QStringLiteral("hideWithPhysicalKeyboard"), true).toBool();
     const bool wantPreview = !parser.isSet(QStringLiteral("no-preview")) && settings.value(QStringLiteral("keyPreview"), true).toBool();
     const int previewLingerMs = settings.value(QStringLiteral("keyPreviewLinger"), 300).toInt();
 
@@ -466,6 +470,19 @@ int main(int argc, char **argv)
     }
 #endif
     QObject::connect(&keyboard, &KeyboardWidget::hideRequested, &controller, &Controller::hide);
+
+    // Stay hidden while a real keyboard is plugged in (USB, Bluetooth, dock).
+    std::unique_ptr<PhysicalKeyboardWatcher> physicalKeyboard;
+    if (hideWithPhysicalKeyboard) {
+        physicalKeyboard = std::make_unique<PhysicalKeyboardWatcher>();
+        if (physicalKeyboard->present()) {
+            qInfo() << "vkbd: physical keyboard connected:" << physicalKeyboard->names() << "- panel stays hidden until it is unplugged";
+        }
+        controller.setAutoShowSuppressed(physicalKeyboard->present());
+        QObject::connect(physicalKeyboard.get(), &PhysicalKeyboardWatcher::presenceChanged, &controller, [&](bool present) {
+            controller.setAutoShowSuppressed(present);
+        });
+    }
     QObject::connect(&keyboard, &KeyboardWidget::screenshotRequested, &controller, &Controller::screenshot);
 
 #ifdef VKBD_HAVE_WAYLAND

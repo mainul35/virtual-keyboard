@@ -30,6 +30,7 @@ add_executable(vkbd
     src/feedback.cpp
     src/pointerinjector.cpp
     src/selectionoverlay.cpp
+    src/physicalkeyboard.cpp
 )
 target_include_directories(vkbd PRIVATE src)
 target_link_libraries(vkbd PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::DBus ${CMAKE_DL_LIBS})

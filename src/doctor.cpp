@@ -1,4 +1,5 @@
 #include "doctor.h"
+#include "physicalkeyboard.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
@@ -157,6 +158,8 @@ int runDoctor()
         }
     }
     line(QStringLiteral("spectacle"), QStandardPaths::findExecutable(QStringLiteral("spectacle")).isEmpty() ? QStringLiteral("not found") : QStringLiteral("found"));
+    const QStringList physical = PhysicalKeyboardWatcher::scan();
+    line(QStringLiteral("physical keyboards"), physical.isEmpty() ? QStringLiteral("none (panel shows automatically)") : physical.join(QLatin1String(", ")) + QStringLiteral(" (panel stays hidden)"));
 
     out() << "\n== last log (~/.cache/vkbd/vkbd.log) ==\n";
     const QString logPath = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/vkbd/vkbd.log");

@@ -34,6 +34,10 @@ public:
     void activeWindowChanged(const QString &id);
     // While held (our own tray menu is open) the keyboard never auto-hides.
     void holdOpen(bool hold);
+    // With a physical keyboard connected the panel is not shown automatically
+    // on activation; explicit show()/toggle() still work.
+    void setAutoShowSuppressed(bool suppressed);
+    bool autoShowSuppressed() const { return m_autoShowSuppressed; }
 
 public Q_SLOTS:
     Q_SCRIPTABLE void show();
@@ -73,6 +77,8 @@ private:
     QString m_activeWindowAtShow;
     bool m_imActive = false;
     bool m_holdOpen = false;
+    bool m_autoShowSuppressed = false;
+    bool m_shownExplicitly = false;
     QTimer m_hideTimer;
     QTimer m_screenshotTimeout;
     bool m_screenshotInProgress = false;
