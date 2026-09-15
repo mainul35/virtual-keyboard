@@ -35,7 +35,8 @@ you everything the stock Maliit keyboard leaves out:
   (the tray icon still shows it on demand), and it comes back as soon as the
   keyboard is unplugged. `hideWithPhysicalKeyboard=false` or
   `--ignore-physical-keyboard` disables this; `vkbd --doctor` lists what it
-  detected.
+  detected, and `physicalKeyboardIgnore=Exact Device Name;Another` in the
+  config file excludes a device that is wrongly taken for a keyboard.
 * Same workflow as Maliit: it pops up when a text field gets focus and hides when
   focus leaves, and it never steals focus from the app you are typing into.
   Popups and menus (including vkbd's own tray menu) do not make it disappear:
@@ -108,6 +109,18 @@ rule, adds you to the `input` group and registers vkbd with KWin.
 The Plasma tray icon's "enable/disable virtual keyboard" toggle and KWin's
 `org.kde.kwin.VirtualKeyboard` D-Bus interface keep working, because to KWin
 `vkbd` is just another input method.
+
+## Login screen (SDDM)
+
+The Plasma login screen runs its own KWin, started by SDDM with
+`--inputmethod maliit-keyboard` (or `plasma-keyboard`) from
+`/usr/lib/sddm/sddm.conf.d/*.conf`; the keyboard picked in System Settings does
+not apply there. `install.sh` writes `/etc/sddm.conf.d/zz-vkbd.conf` with the
+same compositor command but `--inputmethod /usr/local/bin/vkbd`, and adds the
+`sddm` user to the `input` group so the uinput backend works on the login
+screen too. Delete that file to return to the default; `./install.sh --no-sddm`
+skips the step. The lock screen (kscreenlocker) has no keyboard of its own and
+uses the session's input method, i.e. vkbd, automatically.
 
 ## Standalone / X11
 

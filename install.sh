@@ -4,6 +4,7 @@
 #   ./install.sh            install build deps, build, install to /usr/local, set up uinput, register with KWin
 #   ./install.sh --no-kwin  skip the KWin/kwinrc step (X11 sessions)
 #   ./install.sh --no-deps  skip the package installation step
+#   ./install.sh --no-sddm  do not touch the login screen (SDDM) configuration
 #
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -11,10 +12,12 @@ cd "$(dirname "$0")"
 PREFIX="${PREFIX:-/usr/local}"
 DO_KWIN=1
 DO_DEPS=1
+DO_SDDM=1
 for arg in "$@"; do
     case "$arg" in
         --no-kwin) DO_KWIN=0 ;;
         --no-deps) DO_DEPS=0 ;;
+        --no-sddm) DO_SDDM=0 ;;
         *) echo "unknown option: $arg" >&2; exit 1 ;;
     esac
 done
@@ -118,6 +121,29 @@ if [[ $DO_KWIN -eq 1 ]]; then
     else
         echo "    kwriteconfig6 not found; choose 'vkbd Virtual Keyboard' in System Settings > Keyboard > Virtual Keyboard."
     fi
+fi
+
+if [[ $DO_SDDM -eq 1 ]] && command -v sddm >/dev/null; then
+    echo "==> Login screen (SDDM on Wayland) on-screen keyboard"
+    # Plasma starts the login screen's own KWin with "--inputmethod
+    # maliit-keyboard" (or plasma-keyboard) from an SDDM config file; the
+    # keyboard chosen in System Settings is not consulted there. Override the
+    # compositor command in a drop-in that sorts last, keeping every other flag.
+    cmd=$(grep -hs "^CompositorCommand=" /usr/lib/sddm/sddm.conf.d/*.conf /etc/sddm.conf /etc/sddm.conf.d/*.conf 2>/dev/null | grep -v vkbd | tail -1 | cut -d= -f2-)
+    [[ -z "$cmd" ]] && cmd="kwin_wayland --no-global-shortcuts --no-lockscreen --locale1"
+    if [[ "$cmd" == *--inputmethod* ]]; then
+        cmd=$(printf '%s' "$cmd" | sed -E "s#--inputmethod[= ][^ ]+#--inputmethod $PREFIX/bin/vkbd#")
+    else
+        cmd="$cmd --inputmethod $PREFIX/bin/vkbd"
+    fi
+    printf '# Installed by vkbd/install.sh: use vkbd as the login screen keyboard.
+[Wayland]
+CompositorCommand=%s
+' "$cmd" | sudo tee /etc/sddm.conf.d/zz-vkbd.conf >/dev/null
+    # The sddm user needs /dev/uinput too, otherwise only the input-method path is available there.
+    sudo usermod -aG input sddm 2>/dev/null || true
+    echo "    /etc/sddm.conf.d/zz-vkbd.conf -> $cmd"
+    echo "    (takes effect at the next login screen; remove the file to go back to the default keyboard)"
 fi
 
 echo

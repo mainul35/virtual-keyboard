@@ -19,8 +19,10 @@ public:
     bool present() const { return !m_names.isEmpty(); }
     QStringList names() const { return m_names; }
 
-    // One-off scan (used by --doctor too).
-    static QStringList scan();
+    // One-off scan (used by --doctor too). Entries look like
+    // "Logitech K380 (bus 0x05, 123 keys)"; names in `ignore` are skipped.
+    static QStringList scan(const QStringList &ignore = {});
+    void setIgnoreList(const QStringList &names) { m_ignore = names; }
 
 Q_SIGNALS:
     void presenceChanged(bool present);
@@ -31,4 +33,5 @@ private:
     QFileSystemWatcher *m_watcher = nullptr;
     QTimer m_debounce;
     QStringList m_names;
+    QStringList m_ignore;
 };

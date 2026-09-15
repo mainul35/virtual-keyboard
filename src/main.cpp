@@ -475,6 +475,9 @@ int main(int argc, char **argv)
     std::unique_ptr<PhysicalKeyboardWatcher> physicalKeyboard;
     if (hideWithPhysicalKeyboard) {
         physicalKeyboard = std::make_unique<PhysicalKeyboardWatcher>();
+        // physicalKeyboardIgnore=Name One;Name Two  (exact device names)
+        const QStringList ignore = settings.value(QStringLiteral("physicalKeyboardIgnore")).toString().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+        physicalKeyboard->setIgnoreList(ignore);
         if (physicalKeyboard->present()) {
             qInfo() << "vkbd: physical keyboard connected:" << physicalKeyboard->names() << "- panel stays hidden until it is unplugged";
         }
