@@ -30,7 +30,9 @@ install_deps() {
         pkgs=(cmake ninja-build g++ pkg-config
               qt6-base-dev qt6-base-private-dev qt6-wayland-dev qt6-wayland-private-dev
               libwayland-dev libxkbcommon-dev liblayershellqtinterface-dev)
-        sudo apt-get update
+        if ! sudo apt-get update; then
+            echo "    apt-get update failed (another package manager such as Discover/packagekitd may hold the lock); continuing with what is installed"
+        fi
     elif command -v dnf >/dev/null; then
         cmd=(sudo dnf install -y)
         pkgs=(cmake ninja-build gcc-c++ pkgconf-pkg-config
@@ -50,7 +52,8 @@ install_deps() {
     fi
 
     if ! "${cmd[@]}" "${pkgs[@]}"; then
-        # A package name may differ on this release; install what exists one by one.
+        # A package name may differ on this release, or the package manager is
+        # busy; install what can be installed one by one and carry on.
         echo "    bulk install failed, retrying package by package"
         local missing=()
         for p in "${pkgs[@]}"; do
@@ -65,7 +68,7 @@ install_deps() {
 
 if [[ $DO_DEPS -eq 1 ]]; then
     echo "==> Installing build dependencies (sudo)"
-    install_deps
+    install_deps || echo "    dependency step had errors; continuing (use --no-deps to skip it)"
 fi
 
 for tool in cmake g++; do
