@@ -249,6 +249,7 @@ void Controller::imActivated()
     m_hideTimer.stop();
     m_activeWindowAtShow = m_activeWindow ? m_activeWindow() : QString();
     if (m_autoShowSuppressed && !m_shownExplicitly) {
+        qInfo() << "vkbd: not showing: a physical keyboard is connected (tray icon shows it on demand)";
         return; // a physical keyboard is connected; stay out of the way
     }
     // In input-panel mode KWin decides whether the mapped panel is shown.

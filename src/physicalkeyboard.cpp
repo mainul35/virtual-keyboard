@@ -2,6 +2,7 @@
 
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFileSystemWatcher>
 
 #include <cstring>
@@ -15,6 +16,24 @@ namespace {
 
 constexpr unsigned short kVendorVkbd = 0x5642;
 constexpr unsigned short kVendorKeyd = 0x0fac;
+
+// SMBIOS chassis type: 30 tablet, 31 convertible, 32 detachable. On those,
+// an internal i8042 ("AT Translated Set 2") keyboard is a phantom device that
+// exists whether or not a keyboard dock is attached; docks come over USB,
+// Bluetooth or I2C, so the internal one is ignored there.
+bool tabletLikeChassis()
+{
+    static int cached = -1;
+    if (cached < 0) {
+        cached = 0;
+        QFile f(QStringLiteral("/sys/class/dmi/id/chassis_type"));
+        if (f.open(QIODevice::ReadOnly)) {
+            const int type = f.readAll().trimmed().toInt();
+            cached = (type == 30 || type == 31 || type == 32) ? 1 : 0;
+        }
+    }
+    return cached == 1;
+}
 
 bool hasBit(const unsigned long *bits, int code)
 {
@@ -49,6 +68,9 @@ bool isPhysicalKeyboard(int fd, QString *name, QString *details)
     }
     if (id.bustype == BUS_VIRTUAL || id.bustype == BUS_HOST) {
         return false; // uinput devices, ACPI / platform hotkey devices
+    }
+    if (id.bustype == BUS_I8042 && tabletLikeChassis()) {
+        return false; // phantom internal keyboard of a tablet / detachable
     }
     if (id.vendor == kVendorVkbd || id.vendor == kVendorKeyd) {
         return false;

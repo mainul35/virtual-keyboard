@@ -158,6 +158,12 @@ int runDoctor()
         }
     }
     line(QStringLiteral("spectacle"), QStandardPaths::findExecutable(QStringLiteral("spectacle")).isEmpty() ? QStringLiteral("not found") : QStringLiteral("found"));
+    {
+        QFile chassis(QStringLiteral("/sys/class/dmi/id/chassis_type"));
+        if (chassis.open(QIODevice::ReadOnly)) {
+            line(QStringLiteral("chassis type"), QString::fromLatin1(chassis.readAll().trimmed()) + QStringLiteral(" (30 tablet, 31 convertible, 32 detachable: internal i8042 keyboard ignored)"));
+        }
+    }
     const QStringList physical = PhysicalKeyboardWatcher::scan();
     line(QStringLiteral("physical keyboards"), physical.isEmpty() ? QStringLiteral("none (panel shows automatically)") : physical.join(QLatin1String(", ")) + QStringLiteral(" (panel stays hidden)"));
 
