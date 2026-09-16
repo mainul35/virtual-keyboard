@@ -76,6 +76,15 @@ for tool in cmake g++; do
 done
 
 echo "==> Building"
+# A build directory that was created for another source path (checkout moved
+# or copied) makes CMake refuse to configure; start it afresh in that case.
+if [[ -f build/CMakeCache.txt ]]; then
+    cached_src=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' build/CMakeCache.txt)
+    if [[ -n "$cached_src" && "$cached_src" != "$PWD" ]]; then
+        echo "    build/ was configured for $cached_src; recreating it"
+        rm -rf build
+    fi
+fi
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX"
 cmake --build build -j"$(nproc)"
 
